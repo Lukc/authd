@@ -16,7 +16,7 @@ crystal: 0.27
 
 dependencies:
     ipc:
-        git: https://git.karchnu.fr/JunkOS/ipc.cr
+        git: https://git.karchnu.fr/WeirdOS/ipc.cr
         branch: master
     jwt:
         github: crystal-community/jwt
