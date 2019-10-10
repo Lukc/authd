@@ -21,6 +21,7 @@ module AuthD
 		InvalidCredentials
 		InvalidUser
 		UserNotFound # For UID-based GetUser requests.
+		AuthenticationError
 	end
 
 	class GetTokenRequest
@@ -33,6 +34,10 @@ module AuthD
 
 	class AddUserRequest
 		JSON.mapping({
+			# Only clients that have the right shared key will be allowed
+			# to create users.
+			shared_key: String,
+
 			login: String,
 			password: String,
 			uid: Int32?,
@@ -57,6 +62,8 @@ module AuthD
 
 	class ModUserRequest
 		JSON.mapping({
+			shared_key: String,
+
 			uid: Int32,
 			password: String?,
 			avatar: String?
@@ -129,6 +136,7 @@ module AuthD
 		# FIXME: Extra options may be useful to implement here.
 		def add_user(login : String, password : String) : AuthD::User | Exception
 			send RequestTypes::AddUser, {
+				:shared_key => @key,
 				:login => login,
 				:password => password
 			}.to_json
@@ -147,6 +155,7 @@ module AuthD
 		def mod_user(uid : Int32, password : String? = nil, avatar : String? = nil) : Bool | Exception
 			payload = Hash(String, String|Int32).new
 			payload["uid"] = uid
+			payload["shared_key"] = @key
 
 			password.try do |password|
 				payload["password"] = password

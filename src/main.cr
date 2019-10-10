@@ -21,7 +21,7 @@ authd_passwd_file = "passwd"
 authd_group_file = "group"
 authd_jwt_key = "nico-nico-nii"
 
-OptionParser.parse! do |parser|
+OptionParser.parse do |parser|
 	parser.on "-u file", "--passwd-file file", "passwd file." do |name|
 		authd_passwd_file = name
 	end
@@ -88,6 +88,11 @@ IPC::Service.new "auth" do |event|
 				next
 			end
 
+			if request.shared_key != authd_jwt_key
+				client.send ResponseTypes::AuthenticationError, "Invalid authentication key."
+				next
+			end
+
 			if passwd.user_exists? request.login
 				client.send ResponseTypes::InvalidUser, "Another user with the same login already exists."
 
@@ -132,6 +137,11 @@ IPC::Service.new "auth" do |event|
 				request = ModUserRequest.from_json String.new payload
 			rescue e
 				client.send ResponseTypes::MalformedRequest, e.message || ""
+				next
+			end
+
+			if request.shared_key != authd_jwt_key
+				client.send ResponseTypes::AuthenticationError, "Invalid authentication key."
 				next
 			end
 
