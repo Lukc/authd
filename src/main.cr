@@ -52,10 +52,10 @@ IPC::Service.new "auth" do |event|
 		next
 	end
 
-	client = event.connection
-	
 	case event
 	when IPC::Event::Message
+		client = event.connection
+
 		message = event.message
 		payload = message.payload
 
