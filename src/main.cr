@@ -149,9 +149,7 @@ IPC::Service.new "auth" do |event|
 				Passwd.hash_password s
 			end
 
-			avatar = request.avatar
-
-			passwd.mod_user request.uid, password_hash: password_hash, avatar: avatar
+			passwd.mod_user request.uid, password_hash: password_hash
 
 			client.send ResponseTypes::Ok, ""
 		end

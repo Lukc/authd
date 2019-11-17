@@ -174,17 +174,13 @@ class Passwd
 	end
 
 	# FIXME: Edit other important fields.
-	def mod_user(uid, password_hash : String? = nil, avatar : String? = nil)
+	def mod_user(uid, password_hash : String? = nil)
 		new_passwd = passwd_as_array.map do |line|
 			user = AuthD::User.new line	
 
 			if uid == user.uid
 				password_hash.try do |hash|
 					user.password_hash = hash
-				end
-
-				avatar.try do |avatar|
-					user.avatar = avatar
 				end
 
 				user.to_csv
@@ -225,15 +221,6 @@ class AuthD::User
 			@office_phone_number = gecos[2]?
 			@home_phone_number = gecos[3]?
 			@other_contact = gecos[4]?
-
-			# CAUTION: NON-STANDARD EXTENSION
-			@avatar = gecos[5]?.try do |x|
-				if x != ""
-					Base64.decode_string x
-				else
-					nil
-				end
-			end
 		end
 
 		# FIXME: What about those two fields? Keep them, remove them?
@@ -246,7 +233,7 @@ class AuthD::User
 	end
 
 	def gecos
-		unless @location || @office_phone_number || @home_phone_number || @other_contact || @avatar
+		unless @location || @office_phone_number || @home_phone_number || @other_contact
 			if @full_name
 				return @full_name
 			else
@@ -254,7 +241,6 @@ class AuthD::User
 			end
 		end
 
-		[@full_name || "", @location || "", @office_phone_number || "", @home_phone_number || "", @other_contact || "", Base64.strict_encode(@avatar || "")].join ","
+		[@full_name || "", @location || "", @office_phone_number || "", @home_phone_number || "", @other_contact || ""].join ","
 	end
 end
-
