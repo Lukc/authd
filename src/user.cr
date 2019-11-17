@@ -1,6 +1,6 @@
 require "json"
 
-require "./passwd.cr"
+require "passwd"
 
 class Passwd::User
 	JSON.mapping({

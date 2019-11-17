@@ -3,11 +3,10 @@ require "option_parser"
 require "openssl"
 
 require "jwt"
-
+require "passwd"
 require "ipc"
 
 require "./authd.cr"
-require "./passwd.cr"
 
 extend AuthD
 

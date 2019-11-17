@@ -15,6 +15,9 @@ targets:
 crystal: 0.27
 
 dependencies:
+    passwd:
+        git: https://git.karchnu.fr/WeirdOS/passwd.cr
+        branch: master
     ipc:
         git: https://git.karchnu.fr/WeirdOS/ipc.cr
         branch: master
