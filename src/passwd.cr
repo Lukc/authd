@@ -1,11 +1,8 @@
 require "csv"
-require "uuid"
-require "base64"
-
-require "./user.cr"
-require "./group.cr"
 
 # FIXME: Should we work on arrays and convert to CSV at the last second when adding rows?
+# FIXME: Use split, not CSV.
+# FIXME: Prevent using ':' in fields.
 
 class Passwd
 	@passwd : String
@@ -31,9 +28,9 @@ class Passwd
 		CSV.parse File.read(@group), separator: ':'
 	end
 
-	private def set_user_groups(user : AuthD::User)
+	private def set_user_groups(user : Passwd::User)
 		group_as_array.each do |line|
-			group = AuthD::Group.new line
+			group = Passwd::Group.new line
 
 			if group.users.any? { |name| name == user.login }
 				user.groups << group.name
@@ -43,7 +40,7 @@ class Passwd
 
 	def each_user(&block)
 		passwd_as_array.each do |line|
-			yield AuthD::User.new line
+			yield Passwd::User.new line
 		end
 	end
 
@@ -55,7 +52,7 @@ class Passwd
 		false
 	end
 
-	def get_user(uid : Int32) : AuthD::User?
+	def get_user(uid : Int32) : Passwd::User?
 		each_user do |user|
 			if user.uid == uid
 				set_user_groups user
@@ -67,7 +64,7 @@ class Passwd
 
 	##
 	# Will fail if the user is found but the password is invalid.
-	def get_user(login : String, password : String) : AuthD::User?
+	def get_user(login : String, password : String) : Passwd::User?
 		hash = Passwd.hash_password password
 
 		each_user do |user|
@@ -84,20 +81,20 @@ class Passwd
 	end
 
 	def get_all_users
-		users = Array(AuthD::User).new
+		users = Array(Passwd::User).new
 
 		passwd_as_array.each do |line|
-			users << AuthD::User.new line
+			users << Passwd::User.new line
 		end
 
 		users
 	end
 
 	def get_all_groups
-		groups = Array(AuthD::Group).new
+		groups = Array(Passwd::Group).new
 
 		group_as_array.each do |line|
-			groups << AuthD::Group.new line
+			groups << Passwd::Group.new line
 		end
 
 		groups
@@ -154,7 +151,7 @@ class Passwd
 			"x"
 		end
 
-		user = AuthD::User.new login, password_hash, uid, gid, home, shell
+		user = Passwd::User.new login, password_hash, uid, gid, home, shell
 
 		File.write(@passwd, user.to_csv + "\n", mode: "a")
 
@@ -168,7 +165,7 @@ class Passwd
 	def add_group(name, password_hash = "x", gid = nil, users = Array(String).new)
 		gid = get_free_gid if gid.nil?
 
-		group = AuthD::Group.new name, password_hash, gid, users
+		group = Passwd::Group.new name, password_hash, gid, users
 
 		File.write(@group, group.to_csv + "\n", mode: "a")
 	end
@@ -176,7 +173,7 @@ class Passwd
 	# FIXME: Edit other important fields.
 	def mod_user(uid, password_hash : String? = nil)
 		new_passwd = passwd_as_array.map do |line|
-			user = AuthD::User.new line	
+			user = Passwd::User.new line	
 
 			if uid == user.uid
 				password_hash.try do |hash|
@@ -193,7 +190,15 @@ class Passwd
 	end
 end
 
-class AuthD::Group
+class Passwd::Group
+	getter name            : String
+	getter password_hash   : String
+	getter gid             : Int32
+	getter users           = Array(String).new
+
+	def initialize(@name, @password_hash, @gid, @users = [] of String)
+	end
+
 	def initialize(line : Array(String))
 		@name = line[0]
 		@password_hash = line[1]
@@ -207,7 +212,36 @@ class AuthD::Group
 	end
 end
 
-class AuthD::User
+class Passwd::User
+	getter uid             : Int32
+	getter gid             : Int32
+	getter login           : String
+	getter password_hash   : String
+	getter home            : String = "/"
+	getter shell           : String = "/bin/nologin"
+	getter groups          = Array(String).new
+	getter full_name       : String? = nil
+	getter location        : String? = nil
+	getter office_phone_number : String? = nil
+	getter home_phone_number   : String? = nil
+	getter other_contact   : String? = nil
+
+	def initialize(
+		@login,
+		@password_hash,
+		@uid,
+		@gid,
+		@home = "",
+		@shell = "",
+		@full_name = nil,
+		@location = nil,
+		@office_phone_number = nil,
+		@home_phone_number = nil,
+		@other_contact = nil
+	)
+	end
+
+	# Caution: will raise on invalid entries.
 	def initialize(line : Array(String))
 		@login = line[0]
 		@password_hash = line[1]
@@ -223,7 +257,6 @@ class AuthD::User
 			@other_contact = gecos[4]?
 		end
 
-		# FIXME: What about those two fields? Keep them, remove them?
 		@home = line[5]
 		@shell = line[6]
 	end
@@ -244,3 +277,4 @@ class AuthD::User
 		[@full_name || "", @location || "", @office_phone_number || "", @home_phone_number || "", @other_contact || ""].join ","
 	end
 end
+

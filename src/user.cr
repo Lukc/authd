@@ -1,21 +1,8 @@
-
 require "json"
 
-class AuthD::User
-	getter uid             : Int32
-	getter gid             : Int32
-	getter login           : String
-	getter password_hash   : String
-	getter home            : String = "/"
-	getter shell           : String = "/bin/nologin"
-	getter groups          = Array(String).new
-	getter full_name       : String? = nil
-	getter location        : String? = nil
-	getter office_phone_number : String? = nil
-	getter home_phone_number   : String? = nil
-	getter other_contact   : String? = nil
-	getter avatar          : String? = nil
+require "./passwd.cr"
 
+class Passwd::User
 	JSON.mapping({
 		login: String,
 		password_hash: String,
@@ -28,11 +15,7 @@ class AuthD::User
 		office_phone_number: String?,
 		home_phone_number: String?,
 		other_contact: String?,
-		avatar: String?
 	})
-
-	def initialize(@login, @password_hash, @uid, @gid, @home, @shell)
-	end
 
 	def sanitize!
 		@password_hash = "x"
@@ -51,8 +34,7 @@ class AuthD::User
 			:full_name => @full_name,
 			:office_phone_number => @office_phone_number,
 			:home_phone_number => @home_phone_number,
-			:other_contact => @other_contact,
-			:avatar => @avatar
+			:other_contact => @other_contact
 		}
 	end
 end

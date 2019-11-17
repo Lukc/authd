@@ -4,7 +4,6 @@ require "jwt"
 require "ipc"
 
 require "./user.cr"
-require "./group.cr"
 
 module AuthD
 	enum RequestTypes
@@ -94,7 +93,7 @@ module AuthD
 			end
 		end
 
-		def get_user?(login : String, password : String) : User?
+		def get_user?(login : String, password : String) : Passwd::User?
 			send RequestTypes::GetUserByCredentials, {
 				:login => login,
 				:password => password
@@ -103,7 +102,7 @@ module AuthD
 			response = read
 
 			if response.type == ResponseTypes::Ok.value.to_u8
-				User.from_json String.new response.payload
+				Passwd::User.from_json String.new response.payload
 			else
 				nil
 			end
@@ -128,13 +127,13 @@ module AuthD
 		def decode_token(token)
 			user, meta = JWT.decode token, @key, JWT::Algorithm::HS256
 
-			user = AuthD::User.from_json user.to_json
+			user = Passwd::User.from_json user.to_json
 
 			{user, meta}
 		end
 
 		# FIXME: Extra options may be useful to implement here.
-		def add_user(login : String, password : String) : AuthD::User | Exception
+		def add_user(login : String, password : String) : Passwd::User | Exception
 			send RequestTypes::AddUser, {
 				:shared_key => @key,
 				:login => login,
@@ -146,7 +145,7 @@ module AuthD
 			payload = String.new response.payload
 			case ResponseTypes.new response.type.to_i
 			when ResponseTypes::Ok
-				AuthD::User.from_json payload
+				Passwd::User.from_json payload
 			else
 				Exception.new payload
 			end
