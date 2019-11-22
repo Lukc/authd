@@ -13,6 +13,9 @@ class AuthD::Response
 	end
 
 	class_getter type = -1
+	def type
+		@@type
+	end
 
 	macro inherited
 		def self.type

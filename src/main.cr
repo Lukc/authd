@@ -53,61 +53,50 @@ IPC::Service.new "auth" do |event|
 
 	case event
 	when IPC::Event::Message
-		client = event.connection
+		request = Request.from_ipc event.message
 
-		message = event.message
-		payload = message.payload
-
-		request = Request.from_ipc message
-
-		case request
+		response = case request
 		when Request::GetToken
 			user = passwd.get_user request.login, request.password
 
 			if user.nil?
-				client.send Response::Error.new "invalid credentials"
-				
-				next
+				next Response::Error.new "invalid credentials"
 			end
 
 			token = JWT.encode user.to_h, authd_jwt_key, JWT::Algorithm::HS256
 
-			client.send Response::Token.new token
+			Response::Token.new token
 		when Request::AddUser
 			if request.shared_key != authd_jwt_key
-				client.send Response::Error.new "invalid authentication key"
-				next
+				next Response::Error.new "invalid authentication key"
 			end
 
 			if passwd.user_exists? request.login
-				client.send Response::Error.new "login already used"
-
-				next
+				next Response::Error.new "login already used"
 			end
 
 			user = passwd.add_user request.login, request.password
 
-			client.send Response::UserAdded.new user
+			Response::UserAdded.new user
 		when Request::GetUserByCredentials
 			user = passwd.get_user request.login, request.password
 
 			if user
-				client.send Response::User.new user
+				Response::User.new user
 			else
-				client.send Response::Error.new "user not found"
+				Response::Error.new "user not found"
 			end
 		when Request::GetUser
 			user = passwd.get_user request.uid
 
 			if user
-				client.send Response::User.new user
+				Response::User.new user
 			else
-				client.send Response::Error.new "user not found"
+				Response::Error.new "user not found"
 			end
 		when Request::ModUser
 			if request.shared_key != authd_jwt_key
-				client.send Response::Error.new "invalid authentication key"
-				next
+				next Response::Error.new "invalid authentication key"
 			end
 
 			password_hash = request.password.try do |s|
@@ -116,8 +105,12 @@ IPC::Service.new "auth" do |event|
 
 			passwd.mod_user request.uid, password_hash: password_hash
 
-			client.send Response::UserEdited.new request.uid
+			Response::UserEdited.new request.uid
+		else
+			Response::Error.new "unhandled request type"
 		end
+
+		event.connection.send response
 	end
 end
 
