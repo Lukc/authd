@@ -1,3 +1,4 @@
+require "json"
 
 require "jwt"
 
@@ -16,63 +17,131 @@ module AuthD
 			AuthenticationError
 		end
 	end
+end
 
-	class Request
-		enum Type
-			GetToken
-			AddUser
-			GetUser
-			GetUserByCredentials
-			ModUser # Edit user attributes.
-		end
+class AuthD::Request
+	include JSON::Serializable
 
-		class GetToken
-			JSON.mapping({
-				# FIXME: Rename to "login" for consistency.
-				login: String,
-				password: String
-			})
-		end
+	annotation MessageType
+	end
 
-		class AddUser
-			JSON.mapping({
-				# Only clients that have the right shared key will be allowed
-				# to create users.
-				shared_key: String,
+	class_getter type = -1
 
-				login: String,
-				password: String,
-				uid: Int32?,
-				gid: Int32?,
-				home: String?,
-				shell: String?
-			})
-		end
-
-		class GetUser
-			JSON.mapping({
-				uid: Int32
-			})
-		end
-
-		class GetUserByCredentials
-			JSON.mapping({
-				login: String,
-				password: String
-			})
-		end
-
-		class ModUser
-			JSON.mapping({
-				shared_key: String,
-
-				uid: Int32,
-				password: String?,
-				avatar: String?
-			})
+	macro inherited
+		def self.type
+			::AuthD::Request::Type::{{ @type.name.split("::").last.id }}
 		end
 	end
 
+	macro initialize(*properties)
+		def initialize(
+			{% for value in properties %}
+				@{{value.id}}{% if value != properties.last %},{% end %}
+			{% end %}
+		)
+		end
+
+		def type
+			Type::{{ @type.name.split("::").last.id }}
+		end
+	end
+
+	class GetToken < Request
+		property login      : String
+		property password   : String
+
+		initialize :login, :password
+	end
+
+	class AddUser < Request
+		# Only clients that have the right shared key will be allowed
+		# to create users.
+		property shared_key : String
+
+		property login      : String
+		property password   : String
+		property uid        : Int32?
+		property gid        : Int32?
+		property home       : String?
+		property shell      : String?
+
+		initialize :shared_key, :login, :password
+	end
+
+	class GetUser < Request
+		property uid        : Int32
+
+		initialize :uid
+	end
+
+	class GetUserByCredentials < Request
+		property login      : String
+		property password   : String
+
+		initialize :login, :password
+	end
+
+	class ModUser < Request
+		property shared_key : String
+
+		property uid        : Int32
+		property password   : String?
+		property avatar     : String?
+
+		initialize :shared_key, :uid
+	end
+
+	# This creates a Request::Type enumeration. One entry for each request type.
+	{% begin %}
+		enum Type
+			{% for ivar in @type.subclasses %}
+				{% klass = ivar.name %}
+				{% name = ivar.name.split("::").last.id %}
+
+				{% a = ivar.annotation(MessageType) %}
+
+				{% if a %}
+					{% value = a[0] %}
+					{{ name }} = {{ value }}
+				{% else %}
+					{{ name }}
+				{% end %}
+			{% end %}
+		end
+	{% end %}
+
+	# This is an array of all requests types.
+	{% begin %}
+		class_getter requests = [
+			{% for ivar in @type.subclasses %}
+				{% klass = ivar.name %}
+
+				{{klass}},
+			{% end %}
+		]
+	{% end %}
+
+	def self.from_ipc(message : IPC::Message)
+		payload = String.new message.payload
+		type = Type.new message.type.to_i
+
+		begin
+			request = requests.find(&.type.==(type)).try &.from_json(payload)
+		rescue e : JSON::ParseException
+			raise Exception.new "misformed request"
+		end
+
+		request
+	end
+end
+
+class IPC::Connection
+	def send(request : AuthD::Request)
+		send request.type.to_u8, request.to_json
+	end
+end
+
+module AuthD
 	class Client < IPC::Connection
 		property key : String
 
@@ -83,10 +152,7 @@ module AuthD
 		end
 
 		def get_token?(login : String, password : String) : String?
-			send Request::Type::GetToken, {
-				:login => login,
-				:password => password
-			}.to_json
+			send Request::GetToken.new login, password
 
 			response = read
 
@@ -98,10 +164,7 @@ module AuthD
 		end
 
 		def get_user?(login : String, password : String) : Passwd::User?
-			send Request::Type::GetUserByCredentials, {
-				:login => login,
-				:password => password
-			}.to_json
+			send Request::GetUserByCredentials.new login, password
 
 			response = read
 
@@ -113,7 +176,7 @@ module AuthD
 		end
 
 		def get_user?(uid : Int32)
-			send Request::Type::GetUser, {:uid => uid}.to_json
+			send Request::GetUser.new uid
 
 			response = read
 
@@ -138,11 +201,7 @@ module AuthD
 
 		# FIXME: Extra options may be useful to implement here.
 		def add_user(login : String, password : String) : Passwd::User | Exception
-			send Request::Type::AddUser, {
-				:shared_key => @key,
-				:login => login,
-				:password => password
-			}.to_json
+			send Request::AddUser.new @key, login, password
 
 			response = read
 
@@ -156,19 +215,12 @@ module AuthD
 		end
 
 		def mod_user(uid : Int32, password : String? = nil, avatar : String? = nil) : Bool | Exception
-			payload = Hash(String, String|Int32).new
-			payload["uid"] = uid
-			payload["shared_key"] = @key
+			request = Request::ModUser.new @key, uid
 
-			password.try do |password|
-				payload["password"] = password
-			end
+			request.password = password if password
+			request.avatar   = avatar   if avatar
 
-			avatar.try do |avatar|
-				payload["avatar"] = avatar
-			end
-
-			send Request::Type::ModUser, payload.to_json
+			send request
 
 			response = read
 

@@ -58,16 +58,10 @@ IPC::Service.new "auth" do |event|
 		message = event.message
 		payload = message.payload
 
-		case Request::Type.new message.type.to_i
-		when Request::Type::GetToken
-			begin
-				request = Request::GetToken.from_json String.new payload
-			rescue e
-				client.send Response::Type::Malformed.value.to_u8, e.message || ""
+		request = Request.from_ipc message
 
-				next
-			end
-
+		case request
+		when Request::GetToken
 			user = passwd.get_user request.login, request.password
 
 			if user.nil?
@@ -78,15 +72,7 @@ IPC::Service.new "auth" do |event|
 
 			client.send Response::Type::Ok.value.to_u8,
 				JWT.encode user.to_h, authd_jwt_key, JWT::Algorithm::HS256
-		when Request::Type::AddUser
-			begin
-				request = Request::AddUser.from_json String.new payload
-			rescue e
-				client.send Response::Type::Malformed.value.to_u8, e.message || ""
-
-				next
-			end
-
+		when Request::AddUser
 			if request.shared_key != authd_jwt_key
 				client.send Response::Type::AuthenticationError, "Invalid authentication key."
 				next
@@ -101,14 +87,7 @@ IPC::Service.new "auth" do |event|
 			user = passwd.add_user request.login, request.password
 
 			client.send Response::Type::Ok, user.sanitize!.to_json
-		when Request::Type::GetUserByCredentials
-			begin
-				request = Request::GetUserByCredentials.from_json String.new payload
-			rescue e
-				client.send Response::Type::Malformed, e.message || ""
-				next
-			end
-
+		when Request::GetUserByCredentials
 			user = passwd.get_user request.login, request.password
 
 			if user
@@ -116,14 +95,7 @@ IPC::Service.new "auth" do |event|
 			else
 				client.send Response::Type::UserNotFound, ""
 			end
-		when Request::Type::GetUser
-			begin
-				request = Request::GetUser.from_json String.new payload
-			rescue e
-				client.send Response::Type::Malformed, e.message || ""
-				next
-			end
-
+		when Request::GetUser
 			user = passwd.get_user request.uid
 
 			if user
@@ -131,14 +103,7 @@ IPC::Service.new "auth" do |event|
 			else
 				client.send Response::Type::UserNotFound, ""
 			end
-		when Request::Type::ModUser
-			begin
-				request = Request::ModUser.from_json String.new payload
-			rescue e
-				client.send Response::Type::Malformed, e.message || ""
-				next
-			end
-
+		when Request::ModUser
 			if request.shared_key != authd_jwt_key
 				client.send Response::Type::AuthenticationError, "Invalid authentication key."
 				next
