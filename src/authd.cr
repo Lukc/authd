@@ -6,16 +6,110 @@ require "ipc"
 
 require "./user.cr"
 
-module AuthD
-	class Response
-		enum Type
-			Ok
-			Malformed
-			InvalidCredentials
-			InvalidUser
-			UserNotFound # For UID-based GetUser requests.
-			AuthenticationError
+class AuthD::Response
+	include JSON::Serializable
+
+	annotation MessageType
+	end
+
+	class_getter type = -1
+
+	macro inherited
+		def self.type
+			::AuthD::Response::Type::{{ @type.name.split("::").last.id }}
 		end
+	end
+
+	macro initialize(*properties)
+		def initialize(
+			{% for value in properties %}
+				@{{value.id}}{% if value != properties.last %},{% end %}
+			{% end %}
+		)
+		end
+
+		def type
+			Type::{{ @type.name.split("::").last.id }}
+		end
+	end
+
+	class Error < Response
+		property reason : String?
+
+		initialize :reason
+	end
+
+	class Token < Response
+		property token  : String
+
+		initialize :token
+	end
+
+	class User < Response
+		property user   : Passwd::User
+
+		initialize :user
+	end
+
+	class UserAdded < Response
+		property user   : Passwd::User
+
+		initialize :user
+	end
+
+	class UserEdited < Response
+		property uid    : Int32
+
+		initialize :uid
+	end
+
+	# This creates a Request::Type enumeration. One entry for each request type.
+	{% begin %}
+		enum Type
+			{% for ivar in @type.subclasses %}
+				{% klass = ivar.name %}
+				{% name = ivar.name.split("::").last.id %}
+
+				{% a = ivar.annotation(MessageType) %}
+
+				{% if a %}
+					{% value = a[0] %}
+					{{ name }} = {{ value }}
+				{% else %}
+					{{ name }}
+				{% end %}
+			{% end %}
+		end
+	{% end %}
+
+	# This is an array of all requests types.
+	{% begin %}
+		class_getter requests = [
+			{% for ivar in @type.subclasses %}
+				{% klass = ivar.name %}
+
+				{{klass}},
+			{% end %}
+		]
+	{% end %}
+
+	def self.from_ipc(message : IPC::Message)
+		payload = String.new message.payload
+		type = Type.new message.type.to_i
+
+		begin
+			request = requests.find(&.type.==(type)).try &.from_json(payload)
+		rescue e : JSON::ParseException
+			raise Exception.new "malformed request"
+		end
+
+		request
+	end
+end
+
+class IPC::Connection
+	def send(response : AuthD::Response)
+		send response.type.to_u8, response.to_json
 	end
 end
 
@@ -154,10 +248,10 @@ module AuthD
 		def get_token?(login : String, password : String) : String?
 			send Request::GetToken.new login, password
 
-			response = read
+			response = Response.from_ipc read
 
-			if response.type == Response::Type::Ok.value.to_u8
-				String.new response.payload
+			if response.is_a?(Response::Token)
+				response.token
 			else
 				nil
 			end
@@ -166,10 +260,10 @@ module AuthD
 		def get_user?(login : String, password : String) : Passwd::User?
 			send Request::GetUserByCredentials.new login, password
 
-			response = read
+			response = Response.from_ipc read
 
-			if response.type == Response::Type::Ok.value.to_u8
-				Passwd::User.from_json String.new response.payload
+			if response.is_a? Response::User
+				response.user
 			else
 				nil
 			end
@@ -203,14 +297,17 @@ module AuthD
 		def add_user(login : String, password : String) : Passwd::User | Exception
 			send Request::AddUser.new @key, login, password
 
-			response = read
+			response = Response.from_ipc read
 
-			payload = String.new response.payload
-			case Response::Type.new response.type.to_i
-			when Response::Type::Ok
-				Passwd::User.from_json payload
+			case response
+			when Response::UserAdded
+				response.user
+			when Response::Error
+				Exception.new response.reason
 			else
-				Exception.new payload
+				# Should not happen in serialized connections, but…
+				# it’ll happen if you run several requests at once.
+				Exception.new
 			end
 		end
 
@@ -222,13 +319,15 @@ module AuthD
 
 			send request
 
-			response = read
+			response = Response.from_ipc read
 
-			case Response::Type.new response.type.to_i
-			when Response::Type::Ok
+			case response
+			when Response::UserEdited
 				true
+			when Response::Error
+				Exception.new response.reason
 			else
-				Exception.new String.new response.payload
+				Exception.new "???"
 			end
 		end
 	end

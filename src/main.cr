@@ -65,47 +65,48 @@ IPC::Service.new "auth" do |event|
 			user = passwd.get_user request.login, request.password
 
 			if user.nil?
-				client.send Response::Type::InvalidCredentials.value.to_u8, ""
+				client.send Response::Error.new "invalid credentials"
 				
 				next
 			end
 
-			client.send Response::Type::Ok.value.to_u8,
-				JWT.encode user.to_h, authd_jwt_key, JWT::Algorithm::HS256
+			token = JWT.encode user.to_h, authd_jwt_key, JWT::Algorithm::HS256
+
+			client.send Response::Token.new token
 		when Request::AddUser
 			if request.shared_key != authd_jwt_key
-				client.send Response::Type::AuthenticationError, "Invalid authentication key."
+				client.send Response::Error.new "invalid authentication key"
 				next
 			end
 
 			if passwd.user_exists? request.login
-				client.send Response::Type::InvalidUser, "Another user with the same login already exists."
+				client.send Response::Error.new "login already used"
 
 				next
 			end
 
 			user = passwd.add_user request.login, request.password
 
-			client.send Response::Type::Ok, user.sanitize!.to_json
+			client.send Response::UserAdded.new user
 		when Request::GetUserByCredentials
 			user = passwd.get_user request.login, request.password
 
 			if user
-				client.send Response::Type::Ok, user.sanitize!.to_json
+				client.send Response::User.new user
 			else
-				client.send Response::Type::UserNotFound, ""
+				client.send Response::Error.new "user not found"
 			end
 		when Request::GetUser
 			user = passwd.get_user request.uid
 
 			if user
-				client.send Response::Type::Ok, user.sanitize!.to_json
+				client.send Response::User.new user
 			else
-				client.send Response::Type::UserNotFound, ""
+				client.send Response::Error.new "user not found"
 			end
 		when Request::ModUser
 			if request.shared_key != authd_jwt_key
-				client.send Response::Type::AuthenticationError, "Invalid authentication key."
+				client.send Response::Error.new "invalid authentication key"
 				next
 			end
 
@@ -115,7 +116,7 @@ IPC::Service.new "auth" do |event|
 
 			passwd.mod_user request.uid, password_hash: password_hash
 
-			client.send Response::Type::Ok, ""
+			client.send Response::UserEdited.new request.uid
 		end
 	end
 end
