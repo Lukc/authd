@@ -11,7 +11,7 @@ require "./authd.cr"
 extend AuthD
 
 class IPC::Connection
-	def send(type : AuthD::ResponseTypes, payload : String)
+	def send(type : AuthD::Response::Type, payload : String)
 		send type.to_u8, payload
 	end
 end
@@ -58,12 +58,12 @@ IPC::Service.new "auth" do |event|
 		message = event.message
 		payload = message.payload
 
-		case RequestTypes.new message.type.to_i
-		when RequestTypes::GetToken
+		case Request::Type.new message.type.to_i
+		when Request::Type::GetToken
 			begin
-				request = GetTokenRequest.from_json String.new payload
+				request = Request::GetToken.from_json String.new payload
 			rescue e
-				client.send ResponseTypes::MalformedRequest.value.to_u8, e.message || ""
+				client.send Response::Type::Malformed.value.to_u8, e.message || ""
 
 				next
 			end
@@ -71,76 +71,76 @@ IPC::Service.new "auth" do |event|
 			user = passwd.get_user request.login, request.password
 
 			if user.nil?
-				client.send ResponseTypes::InvalidCredentials.value.to_u8, ""
+				client.send Response::Type::InvalidCredentials.value.to_u8, ""
 				
 				next
 			end
 
-			client.send ResponseTypes::Ok.value.to_u8,
+			client.send Response::Type::Ok.value.to_u8,
 				JWT.encode user.to_h, authd_jwt_key, JWT::Algorithm::HS256
-		when RequestTypes::AddUser
+		when Request::Type::AddUser
 			begin
-				request = AddUserRequest.from_json String.new payload
+				request = Request::AddUser.from_json String.new payload
 			rescue e
-				client.send ResponseTypes::MalformedRequest.value.to_u8, e.message || ""
+				client.send Response::Type::Malformed.value.to_u8, e.message || ""
 
 				next
 			end
 
 			if request.shared_key != authd_jwt_key
-				client.send ResponseTypes::AuthenticationError, "Invalid authentication key."
+				client.send Response::Type::AuthenticationError, "Invalid authentication key."
 				next
 			end
 
 			if passwd.user_exists? request.login
-				client.send ResponseTypes::InvalidUser, "Another user with the same login already exists."
+				client.send Response::Type::InvalidUser, "Another user with the same login already exists."
 
 				next
 			end
 
 			user = passwd.add_user request.login, request.password
 
-			client.send ResponseTypes::Ok, user.sanitize!.to_json
-		when RequestTypes::GetUserByCredentials
+			client.send Response::Type::Ok, user.sanitize!.to_json
+		when Request::Type::GetUserByCredentials
 			begin
-				request = GetUserByCredentialsRequest.from_json String.new payload
+				request = Request::GetUserByCredentials.from_json String.new payload
 			rescue e
-				client.send ResponseTypes::MalformedRequest, e.message || ""
+				client.send Response::Type::Malformed, e.message || ""
 				next
 			end
 
 			user = passwd.get_user request.login, request.password
 
 			if user
-				client.send ResponseTypes::Ok, user.sanitize!.to_json
+				client.send Response::Type::Ok, user.sanitize!.to_json
 			else
-				client.send ResponseTypes::UserNotFound, ""
+				client.send Response::Type::UserNotFound, ""
 			end
-		when RequestTypes::GetUser
+		when Request::Type::GetUser
 			begin
-				request = GetUserRequest.from_json String.new payload
+				request = Request::GetUser.from_json String.new payload
 			rescue e
-				client.send ResponseTypes::MalformedRequest, e.message || ""
+				client.send Response::Type::Malformed, e.message || ""
 				next
 			end
 
 			user = passwd.get_user request.uid
 
 			if user
-				client.send ResponseTypes::Ok, user.sanitize!.to_json
+				client.send Response::Type::Ok, user.sanitize!.to_json
 			else
-				client.send ResponseTypes::UserNotFound, ""
+				client.send Response::Type::UserNotFound, ""
 			end
-		when RequestTypes::ModUser
+		when Request::Type::ModUser
 			begin
-				request = ModUserRequest.from_json String.new payload
+				request = Request::ModUser.from_json String.new payload
 			rescue e
-				client.send ResponseTypes::MalformedRequest, e.message || ""
+				client.send Response::Type::Malformed, e.message || ""
 				next
 			end
 
 			if request.shared_key != authd_jwt_key
-				client.send ResponseTypes::AuthenticationError, "Invalid authentication key."
+				client.send Response::Type::AuthenticationError, "Invalid authentication key."
 				next
 			end
 
@@ -150,7 +150,7 @@ IPC::Service.new "auth" do |event|
 
 			passwd.mod_user request.uid, password_hash: password_hash
 
-			client.send ResponseTypes::Ok, ""
+			client.send Response::Type::Ok, ""
 		end
 	end
 end
