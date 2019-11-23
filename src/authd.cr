@@ -96,17 +96,13 @@ class AuthD::Response
 		]
 	{% end %}
 
-	def self.from_ipc(message : IPC::Message)
+	def self.from_ipc(message : IPC::Message) : Response?
 		payload = String.new message.payload
 		type = Type.new message.type.to_i
 
-		begin
-			request = requests.find(&.type.==(type)).try &.from_json(payload)
-		rescue e : JSON::ParseException
-			raise Exception.new "malformed request"
-		end
-
-		request
+		requests.find(&.type.==(type)).try &.from_json(payload)
+	rescue e : JSON::ParseException
+		raise Exception.new "malformed request"
 	end
 end
 
@@ -218,17 +214,13 @@ class AuthD::Request
 		]
 	{% end %}
 
-	def self.from_ipc(message : IPC::Message)
+	def self.from_ipc(message : IPC::Message) : Request?
 		payload = String.new message.payload
 		type = Type.new message.type.to_i
 
-		begin
-			request = requests.find(&.type.==(type)).try &.from_json(payload)
-		rescue e : JSON::ParseException
-			raise Exception.new "misformed request"
-		end
-
-		request
+		requests.find(&.type.==(type)).try &.from_json(payload)
+	rescue e : JSON::ParseException
+		raise Exception.new "malformed request"
 	end
 end
 
