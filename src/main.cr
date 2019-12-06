@@ -11,6 +11,8 @@ require "./authd.cr"
 extend AuthD
 
 class AuthD::Service
+	property registrations_allowed = false
+
 	def initialize(@passwd : Passwd, @jwt_key : String)
 	end
 
@@ -66,6 +68,18 @@ class AuthD::Service
 			@passwd.mod_user request.uid, password_hash: password_hash
 
 			Response::UserEdited.new request.uid
+		when Request::Register
+			if ! @registrations_allowed
+				return Response::Error.new "registrations not allowed"
+			end
+
+			if @passwd.user_exists? request.login
+				return Response::Error.new "login already used"
+			end
+
+			user = @passwd.add_user request.login, request.password
+
+			Response::UserAdded.new user
 		else
 			Response::Error.new "unhandled request type"
 		end
@@ -83,11 +97,15 @@ class AuthD::Service
 
 			case event
 			when IPC::Event::Message
-				request = Request.from_ipc event.message
+				begin
+					request = Request.from_ipc event.message
 
-				response = handle_request request, event.connection
+					response = handle_request request, event.connection
 
-				event.connection.send response
+					event.connection.send response
+				rescue e
+					STDERR.puts "error: #{e.message}"
+				end
 			end
 		end
 	end
@@ -96,6 +114,7 @@ end
 authd_passwd_file = "passwd"
 authd_group_file = "group"
 authd_jwt_key = "nico-nico-nii"
+authd_registrations = false
 
 OptionParser.parse do |parser|
 	parser.on "-u file", "--passwd-file file", "passwd file." do |name|
@@ -110,6 +129,10 @@ OptionParser.parse do |parser|
 		authd_jwt_key = File.read(file_name).chomp
 	end
 
+	parser.on "-R", "--allow-registrations" do
+		authd_registrations = true
+	end
+
 	parser.on "-h", "--help", "Show this help" do
 		puts parser
 
@@ -119,5 +142,7 @@ end
 
 passwd = Passwd.new authd_passwd_file, authd_group_file
 
-AuthD::Service.new(passwd, authd_jwt_key).run
+AuthD::Service.new(passwd, authd_jwt_key).tap do |authd|
+	authd.registrations_allowed = authd_registrations
+end.run
 
