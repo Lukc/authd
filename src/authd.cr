@@ -188,7 +188,7 @@ class AuthD::Request
 		property login      : String
 		property password   : String
 
-		initialize :shared_key, :login, :password
+		initialize :login, :password
 	end
 
 	# This creates a Request::Type enumeration. One entry for each request type.
