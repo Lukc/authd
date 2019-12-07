@@ -33,7 +33,11 @@ document.add-event-listener \DOMContentLoaded ->
 				user: model.user
 				token: model.token
 
-				on-model-update: -> projector.schedule-render!
+				on-model-update: ->
+					projector.schedule-render!
+				on-logout: ->
+					model.token := void
+					model.user := void
 			}
 
 			projector.schedule-render!

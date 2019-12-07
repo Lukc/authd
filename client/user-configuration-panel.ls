@@ -25,17 +25,29 @@ default-heading-renderer = (self) ->
 	full-name = get-full-name self
 
 	h \div.section {key: \heading} [
-		h \div.title.is-2 [ full-name ]
+		h \div.media [
+			h \div.media-content [
+				h \div.title.is-2 [ full-name ]
 
-		if full-name != self.user.login
-			h \div.title.is-3.subtitle [
-				self.user.login
+				if full-name != self.user.login
+					h \div.title.is-3.subtitle [
+						self.user.login
+					]
 			]
+
+			if self.on-logout
+				h \div.media-right [
+					h \a {
+						onclick: ->
+							self.on-logout!
+					} [ "Logout" ]
+				]
+		]
 	]
 
 
 Fields = {
-	render-text-input: (token, auth-ws, key, inputs, model) ->
+	render-text-input: (token, auth-ws, key, inputs, model, on-request) ->
 		upload = ->
 			console.log "clickity click", key, inputs[key], inputs
 			return unless inputs[key]
@@ -47,6 +59,7 @@ Fields = {
 
 			inputs[key] := void
 
+			on-request!
 			auth-ws.set-extra token, "profile", payload
 
 		h \div.field.has-addons {key: key} [
@@ -79,6 +92,7 @@ UserConfigurationPanel = (args) ->
 		heading-renderer: args.heading-renderer || default-heading-renderer
 
 		on-model-update: args.on-model-update || ->
+		on-logout: args.on-logout || void
 
 		model: args.model || [
 			["fullName", "Full Name", "string"]
@@ -104,6 +118,20 @@ UserConfigurationPanel = (args) ->
 			self.profile = message.extra || {}
 
 			self.on-model-update!
+
+	auth-ws.add-event-listener \error, (message) ->
+		self.error := message.reason
+
+		self.on-model-update!
+
+	# Profile updates would be a \extra-updated, so this is specific to the
+	# password.
+	auth-ws.add-event-listener \user-edited, (message) ->
+		self.input["password.old"] := void
+		self.input["password.new"] := void
+		self.input["password.new2"] := void
+		self.success := "password"
+		self.on-model-update!
 
 	unless self.profile
 		auth-ws.socket.onopen = ->
@@ -131,7 +159,7 @@ UserConfigurationPanel = (args) ->
 								when "string", "image-url"
 									h \div.field { key: key } [
 										h \div.label [ label ]
-										Fields.render-text-input self.token, auth-ws, key, self.input, self.profile
+										Fields.render-text-input self.token, auth-ws, key, self.input, self.profile, (-> self.error := void)
 									]
 						]
 					]
@@ -141,27 +169,35 @@ UserConfigurationPanel = (args) ->
 
 				h \div.box { key: \password } [
 					h \div.title.is-4 [ "Password" ]
-					h \div.label [ "Old #{label}" ]
+					h \div.label [ "Old password" ]
 					h \div.control [
 						h \input.input {
 							type: \password
+							value: self.input["password.old"]
 							oninput: (e) ->
 								self.input["password.old"] = e.target.value
 						}
+
+						if self.error == "invalid credentials"
+							h \div.help.is-danger [
+								"The old password was invalid!"
+							]
 					]
-					h \div.label [ "New #{label}" ]
+					h \div.label [ "New password" ]
 					h \div.control [
 						h \input.input {
 							type: \password
+							value: self.input["password.new"]
 							oninput: (e) ->
 								self.input["password.new"] = e.target.value
 						}
 					]
-					h \div.label [ "New #{label} (repeat)" ]
+					h \div.label [ "New password (repeat)" ]
 					h \div.field.has-addons [
 						h \div.control.is-expanded [
 							h \input.input {
 								type: \password
+								value: self.input["password.new2"]
 								oninput: (e) ->
 									self.input["password.new2"] = e.target.value
 							}
@@ -176,11 +212,17 @@ UserConfigurationPanel = (args) ->
 									if self.input["password.new"] != self.input["password.new2"]
 										return
 
+									self.error := void
 									auth-ws.update-password self.user.login, self.input["password.old"], self.input["password.new"]
 
 							} [ "Update" ]
 						]
 					]
+
+					if self.success == "password"
+						h \div.help.is-success [
+							"Password successfully updated!"
+						]
 				]
 
 				if self.show-developer
