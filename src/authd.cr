@@ -66,6 +66,22 @@ class AuthD::Response
 		initialize :uid
 	end
 
+	class Extra < Response
+		property user   : Int32
+		property name   : String
+		property extra  : JSON::Any?
+
+		initialize :user, :name, :extra
+	end
+
+	class ExtraUpdated < Response
+		property user   : Int32
+		property name   : String
+		property extra  : JSON::Any?
+
+		initialize :user, :name, :extra
+	end
+
 	# This creates a Request::Type enumeration. One entry for each request type.
 	{% begin %}
 		enum Type
@@ -189,6 +205,17 @@ class AuthD::Request
 		property password   : String
 
 		initialize :login, :password
+	end
+
+	class Request::GetExtra < Request
+		property token      : String
+		property name       : String
+	end
+
+	class Request::SetExtra < Request
+		property token      : String
+		property name       : String
+		property extra      : JSON::Any
 	end
 
 	# This creates a Request::Type enumeration. One entry for each request type.

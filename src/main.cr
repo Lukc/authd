@@ -5,6 +5,7 @@ require "openssl"
 require "jwt"
 require "passwd"
 require "ipc"
+require "fs"
 
 require "./authd.cr"
 
@@ -13,7 +14,7 @@ extend AuthD
 class AuthD::Service
 	property registrations_allowed = false
 
-	def initialize(@passwd : Passwd, @jwt_key : String)
+	def initialize(@passwd : Passwd, @jwt_key : String, @extras_root : String)
 	end
 
 	def handle_request(request : AuthD::Request?, connection : IPC::Connection)
@@ -80,9 +81,33 @@ class AuthD::Service
 			user = @passwd.add_user request.login, request.password
 
 			Response::UserAdded.new user
+		when Request::GetExtra
+			user = get_user_from_token request.token
+
+			return Response::Error.new "invalid token" unless user
+
+			storage = FS::Hash(String, JSON::Any).new "#{@extras_root}/#{user.uid}"
+
+			Response::Extra.new user.uid, request.name, storage[request.name]?
+		when Request::SetExtra
+			user = get_user_from_token request.token
+
+			return Response::Error.new "invalid token" unless user
+
+			storage = FS::Hash(String, JSON::Any).new "#{@extras_root}/#{user.uid}"
+
+			storage[request.name] = request.extra
+
+			Response::ExtraUpdated.new user.uid, request.name, request.extra
 		else
 			Response::Error.new "unhandled request type"
 		end
+	end
+
+	def get_user_from_token(token)
+		user, meta = JWT.decode token, @jwt_key, JWT::Algorithm::HS256
+
+		Passwd::User.from_json user.to_json
 	end
 
 	def run
@@ -115,6 +140,7 @@ authd_passwd_file = "passwd"
 authd_group_file = "group"
 authd_jwt_key = "nico-nico-nii"
 authd_registrations = false
+authd_extra_storage = "storage"
 
 OptionParser.parse do |parser|
 	parser.on "-u file", "--passwd-file file", "passwd file." do |name|
@@ -127,6 +153,10 @@ OptionParser.parse do |parser|
 
 	parser.on "-K file", "--key-file file", "JWT key file" do |file_name|
 		authd_jwt_key = File.read(file_name).chomp
+	end
+
+	parser.on "-S dir", "--extra-storage dir", "Storage for extra user-data." do |directory|
+		authd_extra_storage = directory
 	end
 
 	parser.on "-R", "--allow-registrations" do
@@ -142,7 +172,7 @@ end
 
 passwd = Passwd.new authd_passwd_file, authd_group_file
 
-AuthD::Service.new(passwd, authd_jwt_key).tap do |authd|
+AuthD::Service.new(passwd, authd_jwt_key, authd_extra_storage).tap do |authd|
 	authd.registrations_allowed = authd_registrations
 end.run
 

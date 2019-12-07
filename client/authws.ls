@@ -11,6 +11,8 @@ AuthWS = (socket-url) ->
 		"get-user-by-credentials": 3
 		"mod-user":                4
 		"register":                5
+		"get-extra":               6
+		"set-extra":               7
 	}
 
 	response-types = {
@@ -19,6 +21,8 @@ AuthWS = (socket-url) ->
 		"user":                    2
 		"user-added":              3
 		"user-edited":             4
+		"extra":                   5
+		"extra-updated":           6
 	}
 
 	# TODO: naming convention
@@ -88,6 +92,19 @@ AuthWS = (socket-url) ->
 		self.send request-types[\register], JSON.stringify {
 			login: login
 			password: password
+		}
+
+	self.get-extra = (token, name) ->
+		self.send request-types[\get-extra], JSON.stringify {
+			token: token
+			name: name
+		}
+
+	self.set-extra = (token, name, extra) ->
+		self.send request-types[\set-extra], JSON.stringify {
+			token: token
+			name: name
+			extra: extra
 		}
 
 	# TODO: authd overhaul required

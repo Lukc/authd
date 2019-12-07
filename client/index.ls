@@ -15,18 +15,26 @@ model = {
 	token: void
 }
 
+authws-url = "ws://localhost:9999/auth.JSON"
+
 document.add-event-listener \DOMContentLoaded ->
 	user-config-panel = void
 
 	login-form = LoginForm {
 		enable-registration: true
-		authws-url: "ws://localhost:9999/auth.JSON"
+		authws-url: authws-url
 
 		on-login: (user, token) ->
 			model.user := user
 			model.token := token
 
-			user-config-panel := UserConfigurationPanel model.user, model.token
+			user-config-panel := UserConfigurationPanel {
+				authhw-url: authws-url
+				user: model.user
+				token: model.token
+
+				on-model-update: -> projector.schedule-render!
+			}
 
 			projector.schedule-render!
 		on-error: (error) ->
@@ -52,9 +60,7 @@ document.add-event-listener \DOMContentLoaded ->
 			else if user-config-panel
 				h \div.section [
 					h \div.container [
-						h \div.box [
-							user-config-panel.render!
-						]
+						user-config-panel.render!
 					]
 				]
 		]
