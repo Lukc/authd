@@ -80,6 +80,12 @@ UserConfigurationPanel = (args) ->
 
 		on-model-update: args.on-model-update || ->
 
+		model: args.model || [
+			["fullName", "Full Name", "string"]
+			["avatar", "Profile Picture", "image-url"]
+			["email", "Mail Address", "string"]
+		]
+
 		input: {}
 	}
 
@@ -117,40 +123,99 @@ UserConfigurationPanel = (args) ->
 					h \div.box {key: \profile} [
 						h \div.form [
 							h \div.title.is-4 [ "Profile" ]
-							h \div.label {key: \full-name-label} [ "Full Name" ]
-							Fields.render-text-input self.token, auth-ws, "fullName", self.input, self.profile
 
-							h \div.label {key: \profile-picture-label} [ "Profile Picture" ]
-							Fields.render-text-input self.token, auth-ws, "avatar", self.input, self.profile
+							for element in self.model
+								[key, label, type] = element
+
+								switch type
+								when "string", "image-url"
+									h \div.field { key: key } [
+										h \div.label [ label ]
+										Fields.render-text-input self.token, auth-ws, key, self.input, self.profile
+									]
 						]
 					]
 				else
 					# FIXME: urk, ugly loader.
 					h \div.button.is-loading
 
-				h \div.box {key: \passwd} [
-					h \div.title.is-4 [ "Permissions" ]
-
-					h \div.form [
-						h \div.field {key: \uid} [
-							h \div.label [ "User ID" ]
-							h \div.control [ self.user.uid.to-string! ]
+				h \div.box { key: \password } [
+					h \div.title.is-4 [ "Password" ]
+					h \div.label [ "Old #{label}" ]
+					h \div.control [
+						h \input.input {
+							type: \password
+							oninput: (e) ->
+								self.input["password.old"] = e.target.value
+						}
+					]
+					h \div.label [ "New #{label}" ]
+					h \div.control [
+						h \input.input {
+							type: \password
+							oninput: (e) ->
+								self.input["password.new"] = e.target.value
+						}
+					]
+					h \div.label [ "New #{label} (repeat)" ]
+					h \div.field.has-addons [
+						h \div.control.is-expanded [
+							h \input.input {
+								type: \password
+								oninput: (e) ->
+									self.input["password.new2"] = e.target.value
+							}
 						]
+						h \div.control [
+							h \div.button {
+								classes: {
+									"is-danger": self.input["password.new"] && self.input["password.new"] != self.input["password.new2"]
+									"is-static": (!self.input["password.new"]) && self.input["password.new"] != self.input["password.new2"]
+								}
+								onclick: ->
+									if self.input["password.new"] != self.input["password.new2"]
+										return
 
-						h \div.field {key: \gid} [
-							h \div.label [ "Group ID" ]
-							h \div.control [ self.user.gid.to-string! ]
-						]
+									auth-ws.update-password self.user.login, self.input["password.old"], self.input["password.new"]
 
-						h \div.field {key: \groups} [
-							h \div.label [ "Groups" ]
-							h \div.control.is-grouped [
-								h \div.tags self.user.groups.map (group) ->
-									h \div.tag [ group ]
-							]
+							} [ "Update" ]
 						]
 					]
 				]
+
+				if self.show-developer
+					h \div.box {key: \passwd} [
+						h \div.title.is-4 [ "Permissions" ]
+
+						h \div.form [
+							h \div.field {key: \uid} [
+								h \div.label [ "User ID" ]
+								h \div.control [ self.user.uid.to-string! ]
+							]
+
+							h \div.field {key: \gid} [
+								h \div.label [ "Group ID" ]
+								h \div.control [ self.user.gid.to-string! ]
+							]
+
+							h \div.field {key: \groups} [
+								h \div.label [ "Groups" ]
+								h \div.control.is-grouped [
+									h \div.tags self.user.groups.map (group) ->
+										h \div.tag [ group ]
+								]
+							]
+						]
+					]
+				else
+					h \a.is-pulled-right.is-small.has-text-grey {
+						key: \passwd
+						onclick: ->
+							self.show-developer := true
+							self.on-model-update!
+					} [
+						"Show developer data!"
+					]
 			]
 		]
 

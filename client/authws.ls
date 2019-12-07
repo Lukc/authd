@@ -13,6 +13,7 @@ AuthWS = (socket-url) ->
 		"register":                5
 		"get-extra":               6
 		"set-extra":               7
+		"update-password":         8
 	}
 
 	response-types = {
@@ -105,6 +106,13 @@ AuthWS = (socket-url) ->
 			token: token
 			name: name
 			extra: extra
+		}
+
+	self.update-password = (login, old-password, new-password) ->
+		self.send request-types[\update-password], JSON.stringify {
+			login: login
+			old_password: old-password
+			new_password: new-password
 		}
 
 	# TODO: authd overhaul required

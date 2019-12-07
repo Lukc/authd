@@ -218,6 +218,12 @@ class AuthD::Request
 		property extra      : JSON::Any
 	end
 
+	class Request::UpdatePassword < Request
+		property login      : String
+		property old_password : String
+		property new_password : String
+	end
+
 	# This creates a Request::Type enumeration. One entry for each request type.
 	{% begin %}
 		enum Type

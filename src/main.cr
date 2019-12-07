@@ -99,6 +99,16 @@ class AuthD::Service
 			storage[request.name] = request.extra
 
 			Response::ExtraUpdated.new user.uid, request.name, request.extra
+		when Request::UpdatePassword
+			user = @passwd.get_user request.login, request.old_password
+
+			return Response::Error.new "invalid credentials" unless user
+
+			password_hash = Passwd.hash_password request.new_password
+
+			@passwd.mod_user user.uid, password_hash: password_hash
+
+			Response::UserEdited.new user.uid
 		else
 			Response::Error.new "unhandled request type"
 		end
