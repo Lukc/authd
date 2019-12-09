@@ -82,6 +82,12 @@ class AuthD::Response
 		initialize :user, :name, :extra
 	end
 
+	class UsersList < Response
+		property users  : Array(Passwd::User)
+
+		initialize :users
+	end
+
 	# This creates a Request::Type enumeration. One entry for each request type.
 	{% begin %}
 		enum Type
@@ -222,6 +228,11 @@ class AuthD::Request
 		property login      : String
 		property old_password : String
 		property new_password : String
+	end
+
+	class Request::ListUsers < Request
+		property token : String?
+		property key : String?
 	end
 
 	# This creates a Request::Type enumeration. One entry for each request type.

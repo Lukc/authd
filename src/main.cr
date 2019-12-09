@@ -109,6 +109,22 @@ class AuthD::Service
 			@passwd.mod_user user.uid, password_hash: password_hash
 
 			Response::UserEdited.new user.uid
+		when Request::ListUsers
+			request.token.try do |token|
+				user = get_user_from_token token
+
+				return Response::Error.new "unauthorized" unless user
+
+				return Response::Error.new "unauthorized" unless user.groups.any? &.==("authd")
+			end
+
+			request.key.try do |key|
+				return Response::Error.new "unauthorized" unless key == @jwt_key
+			end
+
+			return Response::Error.new "unauthorized" unless request.key || request.token
+
+			Response::UsersList.new @passwd.get_all_users
 		else
 			Response::Error.new "unhandled request type"
 		end

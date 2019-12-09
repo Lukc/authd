@@ -14,6 +14,7 @@ AuthWS = (socket-url) ->
 		"get-extra":               6
 		"set-extra":               7
 		"update-password":         8
+		"list-users":              9
 	}
 
 	response-types = {
@@ -24,6 +25,7 @@ AuthWS = (socket-url) ->
 		"user-edited":             4
 		"extra":                   5
 		"extra-updated":           6
+		"users-list":              7
 	}
 
 	# TODO: naming convention
@@ -113,6 +115,11 @@ AuthWS = (socket-url) ->
 			login: login
 			old_password: old-password
 			new_password: new-password
+		}
+
+	self.list-users = (token) ->
+		self.send request-types[\list-users], JSON.stringify {
+			token: token
 		}
 
 	# TODO: authd overhaul required

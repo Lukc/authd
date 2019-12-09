@@ -10,6 +10,7 @@ AuthWS = require "./authws.ls"
 
 LoginForm = require "./login-form.ls"
 UserConfigurationPanel = require "./user-configuration-panel.ls"
+UserAdminPanel = require "./user-admin-panel.ls"
 
 model = {
 	token: void
@@ -19,6 +20,7 @@ authws-url = "ws://localhost:9999/auth.JSON"
 
 document.add-event-listener \DOMContentLoaded ->
 	user-config-panel = void
+	user-admin-panel  = void
 
 	login-form = LoginForm {
 		enable-registration: true
@@ -28,17 +30,30 @@ document.add-event-listener \DOMContentLoaded ->
 			model.user := user
 			model.token := token
 
-			user-config-panel := UserConfigurationPanel {
-				authhw-url: authws-url
-				user: model.user
-				token: model.token
+			if user.groups.find (== "authd")
+				user-admin-panel := UserAdminPanel {
+					authws-url: authws-url
+					user: model.user
+					token: model.token
 
-				on-model-update: ->
-					projector.schedule-render!
-				on-logout: ->
-					model.token := void
-					model.user := void
-			}
+					on-model-update: ->
+						projector.schedule-render!
+					on-logout: ->
+						model.token := void
+						model.user := void
+				}
+			else
+				user-config-panel := UserConfigurationPanel {
+					authws-url: authws-url
+					user: model.user
+					token: model.token
+
+					on-model-update: ->
+						projector.schedule-render!
+					on-logout: ->
+						model.token := void
+						model.user := void
+				}
 
 			projector.schedule-render!
 		on-error: (error) ->
@@ -67,6 +82,11 @@ document.add-event-listener \DOMContentLoaded ->
 						user-config-panel.render!
 					]
 				]
+			else if user-admin-panel
+				h \div.section [
+					h \div.container [
+						user-admin-panel.render!
+					]
+				]
 		]
-
 
