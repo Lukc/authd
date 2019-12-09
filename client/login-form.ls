@@ -34,6 +34,10 @@ LoginForm = (args) ->
 
 	auth-ws = AuthWS self.authws-url
 
+	auth-ws.user-on-socket-error.push (...) ->
+		self.error = "socket error"
+		self.on-error ...
+
 	auth-ws.add-event-listener \token, (message) ->
 		self.error := void
 
@@ -71,6 +75,12 @@ LoginForm = (args) ->
 		self.on-error message.reason
 
 	self.render = ->
+		if self.error == "socket error"
+			return h \div.notification.is-danger [
+				h \div.title.is-4 [ "WebSocket error!" ]
+				h \p [ "Cannot connect to authd." ]
+			]
+
 		h \form.form.login-form {
 			key: self
 			onsubmit: (e) ->
