@@ -113,16 +113,16 @@ class AuthD::Service
 			request.token.try do |token|
 				user = get_user_from_token token
 
-				return Response::Error.new "unauthorized" unless user
+				return Response::Error.new "unauthorized (user not found from token)" unless user
 
-				return Response::Error.new "unauthorized" unless user.groups.any? &.==("authd")
+				return Response::Error.new "unauthorized (user not in authd group)" unless user.groups.any? &.==("authd")
 			end
 
 			request.key.try do |key|
-				return Response::Error.new "unauthorized" unless key == @jwt_key
+				return Response::Error.new "unauthorized (wrong shared key)" unless key == @jwt_key
 			end
 
-			return Response::Error.new "unauthorized" unless request.key || request.token
+			return Response::Error.new "unauthorized (no key nor token)" unless request.key || request.token
 
 			Response::UsersList.new @passwd.get_all_users
 		else
