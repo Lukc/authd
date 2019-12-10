@@ -11,6 +11,8 @@ AuthWS = require "./authws.ls"
 LoginForm = require "./login-form.ls"
 UserConfigurationPanel = require "./user-configuration-panel.ls"
 UserAdminPanel = require "./user-admin-panel.ls"
+UsersList = require "./user-list.ls"
+GroupsList = require "./groups-list.ls"
 
 model = {
 	token: void
@@ -31,10 +33,20 @@ document.add-event-listener \DOMContentLoaded ->
 			model.token := token
 
 			if user.groups.find (== "authd")
+				tabs = [
+					UsersList {
+						token: model.token
+						authws-url: authws-url
+						on-model-update: ->
+							projector.schedule-render!
+					}
+					GroupsList {}
+				]
 				user-admin-panel := UserAdminPanel {
 					authws-url: authws-url
 					user: model.user
 					token: model.token
+					tabs: tabs
 
 					on-model-update: ->
 						projector.schedule-render!
