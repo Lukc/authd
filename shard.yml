@@ -24,8 +24,8 @@ dependencies:
     jwt:
         github: crystal-community/jwt
         branch: master
-    fs:
-        git: https://git.karchnu.fr/WeirdOS/fs.cr
+    dodb:
+        git: https://git.karchnu.fr/WeirdOS/dodb.cr
         branch: master
 
 license: EUPL

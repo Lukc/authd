@@ -5,7 +5,7 @@ require "openssl"
 require "jwt"
 require "passwd"
 require "ipc"
-require "fs"
+require "dodb"
 
 require "./authd.cr"
 
@@ -86,7 +86,7 @@ class AuthD::Service
 
 			return Response::Error.new "invalid token" unless user
 
-			storage = FS::Hash(String, JSON::Any).new "#{@extras_root}/#{user.uid}"
+			storage = DODB::DataBase(String, JSON::Any).new "#{@extras_root}/#{user.uid}"
 
 			Response::Extra.new user.uid, request.name, storage[request.name]?
 		when Request::SetExtra
@@ -94,7 +94,7 @@ class AuthD::Service
 
 			return Response::Error.new "invalid token" unless user
 
-			storage = FS::Hash(String, JSON::Any).new "#{@extras_root}/#{user.uid}"
+			storage = DODB::DataBase(String, JSON::Any).new "#{@extras_root}/#{user.uid}"
 
 			storage[request.name] = request.extra
 
