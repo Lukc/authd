@@ -3,7 +3,6 @@ require "option_parser"
 require "openssl"
 
 require "jwt"
-require "passwd"
 require "ipc"
 require "dodb"
 
@@ -14,59 +13,114 @@ extend AuthD
 class AuthD::Service
 	property registrations_allowed = false
 
-	def initialize(@passwd : Passwd, @jwt_key : String, @extras_root : String)
+	@users_per_login : DODB::Index(User)
+
+	def initialize(@storage_root : String, @jwt_key : String)
+		@users = DODB::DataBase(String, User).new @storage_root
+		@users_per_login = @users.new_index "login", &.login
+
+		@last_uid_file = "#{@storage_root}/last_used_uid"
+	end
+
+	def hash_password(password : String) : String
+		digest = OpenSSL::Digest.new "sha256"
+		digest << password
+		digest.hexdigest
+	end
+
+	def new_uid
+		begin
+			uid = File.read(@last_uid_file).to_i
+		rescue
+			uid = 999
+		end
+
+		uid += 1
+
+		File.write @last_uid_file, uid.to_s
+
+		uid
 	end
 
 	def handle_request(request : AuthD::Request?, connection : IPC::Connection)
 		case request
 		when Request::GetToken
-			user = @passwd.get_user request.login, request.password
+			user = @users_per_login.get request.login
+
+			if user.password_hash != hash_password request.password
+				return Response::Error.new "invalid credentials"
+			end
 
 			if user.nil?
 				return Response::Error.new "invalid credentials"
 			end
 
-			token = JWT.encode user.to_h, @jwt_key, JWT::Algorithm::HS256
+			token = user.to_token
 
-			Response::Token.new token
+			Response::Token.new token.to_s @jwt_key
 		when Request::AddUser
 			if request.shared_key != @jwt_key
 				return Response::Error.new "invalid authentication key"
 			end
 
-			if @passwd.user_exists? request.login
+			if @users_per_login.get? request.login
 				return Response::Error.new "login already used"
 			end
 
-			user = @passwd.add_user request.login, request.password
+			password_hash = hash_password request.password
 
-			Response::UserAdded.new user
+			uid = new_uid
+
+			user = User.new uid, request.login, password_hash
+
+			request.profile.try do |profile|
+				user.profile = profile
+			end
+
+			@users[user.uid.to_s] = user
+
+			Response::UserAdded.new user.to_public
 		when Request::GetUserByCredentials
-			user = @passwd.get_user request.login, request.password
+			user = @users_per_login.get request.login
 
-			if user
-				Response::User.new user
-			else
-				Response::Error.new "user not found"
+			unless user
+				return Response::Error.new "invalid credentials"
 			end
+			
+			if hash_password(request.password) != user.password_hash
+				return Response::Error.new "invalid credentials"
+			end
+
+			Response::User.new user.to_public
 		when Request::GetUser
-			user = @passwd.get_user request.uid
-
-			if user
-				Response::User.new user
+			uid_or_login = request.user
+			user = if uid_or_login.is_a? Int32
+				@users[uid_or_login.to_s]?
 			else
-				Response::Error.new "user not found"
+				@users_per_login.get? uid_or_login
 			end
+
+			if user.nil?
+				return Response::Error.new "user not found"
+			end
+
+			Response::User.new user.to_public
 		when Request::ModUser
 			if request.shared_key != @jwt_key
 				return Response::Error.new "invalid authentication key"
 			end
 
-			password_hash = request.password.try do |s|
-				Passwd.hash_password s
+			user = @users[request.uid.to_s]?
+
+			unless user
+				return Response::Error.new "user not found"
 			end
 
-			@passwd.mod_user request.uid, password_hash: password_hash
+			password_hash = request.password.try do |s|
+				user.password_hash = hash_password s
+			end
+
+			@users[user.uid.to_s] = user
 
 			Response::UserEdited.new request.uid
 		when Request::Register
@@ -74,48 +128,46 @@ class AuthD::Service
 				return Response::Error.new "registrations not allowed"
 			end
 
-			if @passwd.user_exists? request.login
+			if @users_per_login.get? request.login
 				return Response::Error.new "login already used"
 			end
 
-			user = @passwd.add_user request.login, request.password
+			uid = new_uid
+			password = hash_password request.password
 
-			Response::UserAdded.new user
-		when Request::GetExtra
-			user = get_user_from_token request.token
+			user = User.new uid, request.login, password
 
-			return Response::Error.new "invalid token" unless user
+			request.profile.try do |profile|
+				user.profile = profile
+			end
 
-			storage = DODB::DataBase(String, JSON::Any).new "#{@extras_root}/#{user.uid}"
+			@users[user.uid.to_s] = user
 
-			Response::Extra.new user.uid, request.name, storage[request.name]?
-		when Request::SetExtra
-			user = get_user_from_token request.token
-
-			return Response::Error.new "invalid token" unless user
-
-			storage = DODB::DataBase(String, JSON::Any).new "#{@extras_root}/#{user.uid}"
-
-			storage[request.name] = request.extra
-
-			Response::ExtraUpdated.new user.uid, request.name, request.extra
+			Response::UserAdded.new user.to_public
 		when Request::UpdatePassword
-			user = @passwd.get_user request.login, request.old_password
+			user = @users_per_login.get? request.login
 
-			return Response::Error.new "invalid credentials" unless user
+			unless user
+				return Response::Error.new "invalid credentials"
+			end
 
-			password_hash = Passwd.hash_password request.new_password
+			if hash_password(request.old_password) != user.password_hash
+				return Response::Error.new "invalid credentials"
+			end
 
-			@passwd.mod_user user.uid, password_hash: password_hash
+			user.password_hash = hash_password request.new_password
+
+			@users[user.uid.to_s] = user
 
 			Response::UserEdited.new user.uid
 		when Request::ListUsers
+			# FIXME: Lines too long, repeatedly (>80c with 4c tabs).
 			request.token.try do |token|
 				user = get_user_from_token token
 
-				return Response::Error.new "unauthorized (user not found from token)" unless user
+				return Response::Error.new "unauthorized (user not found from token)"
 
-				return Response::Error.new "unauthorized (user not in authd group)" unless user.groups.any? &.==("authd")
+				return Response::Error.new "unauthorized (user not in authd group)" unless user.permissions["authd"]?.try(&.["*"].>=(User::PermissionLevel::Read))
 			end
 
 			request.key.try do |key|
@@ -124,16 +176,69 @@ class AuthD::Service
 
 			return Response::Error.new "unauthorized (no key nor token)" unless request.key || request.token
 
-			Response::UsersList.new @passwd.get_all_users
+			Response::UsersList.new @users.to_h.map &.[1].to_public
+		when Request::CheckPermission
+			unless request.shared_key == @jwt_key
+				return Response::Error.new "unauthorized"
+			end
+
+			user = @users[request.user.to_s]?
+
+			if user.nil?
+				return Response::Error.new "no such user"
+			end
+
+			service = request.service
+			service_permissions = user.permissions[service]?
+
+			if service_permissions.nil?
+				return Response::PermissionCheck.new service, request.resource, user.uid, User::PermissionLevel::None
+			end
+
+			resource_permissions = service_permissions[request.resource]?
+
+			if resource_permissions.nil?
+				return Response::PermissionCheck.new service, request.resource, user.uid, User::PermissionLevel::None
+			end
+
+			return Response::PermissionCheck.new service, request.resource, user.uid, resource_permissions
+		when Request::SetPermission
+			unless request.shared_key == @jwt_key
+				return Response::Error.new "unauthorized"
+			end
+
+			user = @users[request.user.to_s]?
+
+			if user.nil?
+				return Response::Error.new "no such user"
+			end
+
+			service = request.service
+			service_permissions = user.permissions[service]?
+
+			if service_permissions.nil?
+				service_permissions = Hash(String, User::PermissionLevel).new
+				user.permissions[service] = service_permissions
+			end
+
+			if request.permission.none?
+				service_permissions.delete request.resource
+			else
+				service_permissions[request.resource] = request.permission
+			end
+
+			@users[user.uid.to_s] = user
+
+			Response::PermissionSet.new user.uid, service, request.resource, request.permission
 		else
 			Response::Error.new "unhandled request type"
 		end
 	end
 
-	def get_user_from_token(token)
-		user, meta = JWT.decode token, @jwt_key, JWT::Algorithm::HS256
+	def get_user_from_token(token : String)
+		token_payload = Token.from_s(token, @jwt_key)
 
-		Passwd::User.from_json user.to_json
+		@users[token_payload.uid.to_s]?
 	end
 
 	def run
@@ -162,27 +267,17 @@ class AuthD::Service
 	end
 end
 
-authd_passwd_file = "passwd"
-authd_group_file = "group"
+authd_storage = "storage"
 authd_jwt_key = "nico-nico-nii"
 authd_registrations = false
-authd_extra_storage = "storage"
 
 OptionParser.parse do |parser|
-	parser.on "-u file", "--passwd-file file", "passwd file." do |name|
-		authd_passwd_file = name
-	end
-
-	parser.on "-g file", "--group-file file", "group file." do |name|
-		authd_group_file = name
+	parser.on "-s directory", "--storage directory", "Directory in which to store users." do |directory|
+		authd_storage = directory
 	end
 
 	parser.on "-K file", "--key-file file", "JWT key file" do |file_name|
 		authd_jwt_key = File.read(file_name).chomp
-	end
-
-	parser.on "-S dir", "--extra-storage dir", "Storage for extra user-data." do |directory|
-		authd_extra_storage = directory
 	end
 
 	parser.on "-R", "--allow-registrations" do
@@ -196,9 +291,7 @@ OptionParser.parse do |parser|
 	end
 end
 
-passwd = Passwd.new authd_passwd_file, authd_group_file
-
-AuthD::Service.new(passwd, authd_jwt_key, authd_extra_storage).tap do |authd|
+AuthD::Service.new(authd_storage, authd_jwt_key).tap do |authd|
 	authd.registrations_allowed = authd_registrations
 end.run
 

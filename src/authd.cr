@@ -6,6 +6,9 @@ require "ipc"
 
 require "./user.cr"
 
+class AuthD::Exception < Exception
+end
+
 class AuthD::Response
 	include JSON::Serializable
 
@@ -49,13 +52,13 @@ class AuthD::Response
 	end
 
 	class User < Response
-		property user   : Passwd::User
+		property user   : ::AuthD::User::Public
 
 		initialize :user
 	end
 
 	class UserAdded < Response
-		property user   : Passwd::User
+		property user   : ::AuthD::User::Public
 
 		initialize :user
 	end
@@ -66,26 +69,28 @@ class AuthD::Response
 		initialize :uid
 	end
 
-	class Extra < Response
-		property user   : Int32
-		property name   : String
-		property extra  : JSON::Any?
-
-		initialize :user, :name, :extra
-	end
-
-	class ExtraUpdated < Response
-		property user   : Int32
-		property name   : String
-		property extra  : JSON::Any?
-
-		initialize :user, :name, :extra
-	end
-
 	class UsersList < Response
-		property users  : Array(Passwd::User)
+		property users  : Array(::AuthD::User::Public)
 
 		initialize :users
+	end
+
+	class PermissionCheck < Response
+		property user       : Int32
+		property service    : String
+		property resource   : String
+		property permission : ::AuthD::User::PermissionLevel
+
+		initialize :service, :resource, :user, :permission
+	end
+
+	class PermissionSet < Response
+		property user       : Int32
+		property service    : String
+		property resource   : String
+		property permission : ::AuthD::User::PermissionLevel
+
+		initialize :user, :service, :resource, :permission
 	end
 
 	# This creates a Request::Type enumeration. One entry for each request type.
@@ -175,18 +180,15 @@ class AuthD::Request
 
 		property login      : String
 		property password   : String
-		property uid        : Int32?
-		property gid        : Int32?
-		property home       : String?
-		property shell      : String?
+		property profile    : JSON::Any?
 
-		initialize :shared_key, :login, :password
+		initialize :shared_key, :login, :password, :profile
 	end
 
 	class GetUser < Request
-		property uid        : Int32
+		property user       : Int32 | String
 
-		initialize :uid
+		initialize :user
 	end
 
 	class GetUserByCredentials < Request
@@ -209,19 +211,9 @@ class AuthD::Request
 	class Request::Register < Request
 		property login      : String
 		property password   : String
+		property profile    : JSON::Any?
 
-		initialize :login, :password
-	end
-
-	class Request::GetExtra < Request
-		property token      : String
-		property name       : String
-	end
-
-	class Request::SetExtra < Request
-		property token      : String
-		property name       : String
-		property extra      : JSON::Any
+		initialize :login, :password, :profile
 	end
 
 	class Request::UpdatePassword < Request
@@ -233,6 +225,29 @@ class AuthD::Request
 	class Request::ListUsers < Request
 		property token : String?
 		property key : String?
+	end
+
+	class CheckPermission < Request
+		property shared_key : String
+
+		# FIXME: Make it Int32 | String
+		property user       : Int32
+		property service    : String
+		property resource   : String
+
+		initialize :shared_key, :user, :service, :resource
+	end
+
+	class SetPermission < Request
+		property shared_key : String
+
+		# FIXME: Make it Int32 | String
+		property user       : Int32
+		property service    : String
+		property resource   : String
+		property permission : ::AuthD::User::PermissionLevel
+
+		initialize :shared_key, :user, :service, :resource, :permission
 	end
 
 	# This creates a Request::Type enumeration. One entry for each request type.
@@ -315,13 +330,13 @@ module AuthD
 			end
 		end
 
-		def get_user?(uid : Int32)
-			send Request::GetUser.new uid
+		def get_user?(uid_or_login : Int32 | String) : ::AuthD::User::Public?
+			send Request::GetUser.new uid_or_login
 
-			response = read
+			response = Response.from_ipc read
 
-			if response.type == Response::Type::Ok.value.to_u8
-				User.from_json String.new response.payload
+			if response.is_a? Response::User
+				response.user
 			else
 				nil
 			end
@@ -334,14 +349,14 @@ module AuthD
 		def decode_token(token)
 			user, meta = JWT.decode token, @key, JWT::Algorithm::HS256
 
-			user = Passwd::User.from_json user.to_json
+			user = ::AuthD::User::Public.from_json user.to_json
 
 			{user, meta}
 		end
 
 		# FIXME: Extra options may be useful to implement here.
-		def add_user(login : String, password : String) : Passwd::User | Exception
-			send Request::AddUser.new @key, login, password
+		def add_user(login : String, password : String, profile : JSON::Any?) : ::AuthD::User::Public | Exception
+			send Request::AddUser.new @key, login, password, profile
 
 			response = Response.from_ipc read
 
@@ -349,11 +364,23 @@ module AuthD
 			when Response::UserAdded
 				response.user
 			when Response::Error
-				Exception.new response.reason
+				raise Exception.new response.reason
 			else
 				# Should not happen in serialized connections, but…
 				# it’ll happen if you run several requests at once.
 				Exception.new
+			end
+		end
+
+		def register(login : String, password : String, profile : JSON::Any?) : ::AuthD::User::Public?
+			send Request::Register.new login, password, profile
+
+			response = Response.from_ipc read
+
+			case response
+			when Response::UserAdded
+			when Response::Error
+				raise Exception.new response.reason
 			end
 		end
 
@@ -374,6 +401,40 @@ module AuthD
 				Exception.new response.reason
 			else
 				Exception.new "???"
+			end
+		end
+
+		def check_permission(user : ::AuthD::User::Public, service_name : String, resource_name : String) : User::PermissionLevel
+			request = Request::CheckPermission.new @key, user.uid, service_name, resource_name
+
+			send request
+
+			response = Response.from_ipc read
+
+			case response
+			when Response::PermissionCheck
+				response.permission
+			when Response
+				raise Exception.new "unexpected response: #{response.type}"
+			else
+				raise Exception.new "unexpected response"
+			end
+		end
+
+		def set_permission(uid : Int32, service : String, resource : String, permission : User::PermissionLevel)
+			request = Request::SetPermission.new @key, uid, service, resource, permission
+
+			send request
+
+			response = Response.from_ipc read
+
+			case response
+			when Response::PermissionSet
+				true
+			when Response
+				raise Exception.new "unexpected response: #{response.type}"
+			else
+				raise Exception.new "unexpected response"
 			end
 		end
 	end

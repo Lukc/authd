@@ -1,41 +1,53 @@
 require "json"
 
-require "passwd"
+require "./token.cr"
 
-class Passwd::User
-	JSON.mapping({
-		login: String,
-		password_hash: String,
-		uid: Int32,
-		gid: Int32,
-		home: String,
-		shell: String,
-		groups: Array(String),
-		full_name: String?,
-		office_phone_number: String?,
-		home_phone_number: String?,
-		other_contact: String?,
-	})
+class AuthD::User
+	include JSON::Serializable
 
-	def sanitize!
-		@password_hash = "x"
-		self
+	enum PermissionLevel
+		None
+		Read
+		Edit
+		Admin
+
+		def to_json(o)
+			to_s.downcase.to_json o
+		end
 	end
 
-	def to_h
-		{
-			:login => @login,
-			:password_hash => "x", # Not real hash in JWT.
-			:uid => @uid,
-			:gid => @gid,
-			:home => @home,
-			:shell => @shell,
-			:groups => @groups,
-			:full_name => @full_name,
-			:office_phone_number => @office_phone_number,
-			:home_phone_number => @home_phone_number,
-			:other_contact => @other_contact
-		}
+	# Public.
+	property login         : String
+	property uid           : Int32
+	property profile       : JSON::Any?
+
+	# Private.
+	property password_hash : String
+	property permissions   : Hash(String, Hash(String, PermissionLevel))
+	property configuration : Hash(String, Hash(String, JSON::Any))
+
+	def to_token
+		Token.new @login, @uid
+	end
+
+	def initialize(@uid, @login, @password_hash)
+		@permissions   = Hash(String, Hash(String, PermissionLevel)).new
+		@configuration = Hash(String, Hash(String, JSON::Any)).new
+	end
+
+	class Public
+		include JSON::Serializable
+
+		property login   : String
+		property uid     : Int32
+		property profile : JSON::Any?
+
+		def initialize(@uid, @login, @profile)
+		end
+	end
+
+	def to_public : Public
+		Public.new @uid, @login, @profile
 	end
 end
 
