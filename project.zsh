@@ -16,3 +16,10 @@ targets+=(client/style.css)
 type[client/style.css]=sass
 sources[client/style.css]=client/style.sass
 
+for file in utils/*.cr; do
+	util="$(basename ${file%.cr})"
+	targets+=($util)
+	type[$util]=crystal
+	sources[$util]=utils/$util.cr
+done
+
