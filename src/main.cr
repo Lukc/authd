@@ -81,7 +81,7 @@ class AuthD::Service
 
 			Response::UserAdded.new user.to_public
 		when Request::GetUserByCredentials
-			user = @users_per_login.get request.login
+			user = @users_per_login.get? request.login
 
 			unless user
 				return Response::Error.new "invalid credentials"
