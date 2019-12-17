@@ -272,6 +272,8 @@ authd_jwt_key = "nico-nico-nii"
 authd_registrations = false
 
 OptionParser.parse do |parser|
+	parser.banner = "usage: authd [options]"
+
 	parser.on "-s directory", "--storage directory", "Directory in which to store users." do |directory|
 		authd_storage = directory
 	end
