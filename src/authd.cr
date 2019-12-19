@@ -318,7 +318,7 @@ module AuthD
 			end
 		end
 
-		def get_user?(login : String, password : String) : Passwd::User?
+		def get_user?(login : String, password : String) : AuthD::User::Public?
 			send Request::GetUserByCredentials.new login, password
 
 			response = Response.from_ipc read
