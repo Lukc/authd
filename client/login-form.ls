@@ -12,6 +12,7 @@ LoginForm = (args) ->
 	self = {
 		on-login: args.on-login || ->
 		on-error: args.on-error || ->
+		schedule-render: args.schedule-render || ->
 		current-view: "login"
 
 		enable-registration: args.enable-registration || false
@@ -22,7 +23,7 @@ LoginForm = (args) ->
 			password: ""
 			repeat-password: ""
 		}
-		locked-input: false
+		locked-input: true
 
 		error: void
 
@@ -33,6 +34,10 @@ LoginForm = (args) ->
 
 
 	auth-ws = AuthWS self.authws-url
+
+	auth-ws.socket.onopen = ->
+		self.locked-input := false
+		self.schedule-render!
 
 	auth-ws.user-on-socket-error.push (...) ->
 		self.error = "socket error"
