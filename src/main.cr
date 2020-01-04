@@ -14,9 +14,11 @@ class AuthD::Service
 	property registrations_allowed = false
 
 	@users_per_login : DODB::Index(User)
+	@users_per_uid   : DODB::Index(User)
 
 	def initialize(@storage_root : String, @jwt_key : String)
-		@users = DODB::DataBase(String, User).new @storage_root
+		@users = DODB::DataBase(User).new @storage_root
+		@users_per_uid   = @users.new_index "uid",   &.uid.to_s
 		@users_per_login = @users.new_index "login", &.login
 
 		@last_uid_file = "#{@storage_root}/last_used_uid"
@@ -77,7 +79,7 @@ class AuthD::Service
 				user.profile = profile
 			end
 
-			@users[user.uid.to_s] = user
+			@users << user
 
 			Response::UserAdded.new user.to_public
 		when Request::GetUserByCredentials
@@ -95,7 +97,7 @@ class AuthD::Service
 		when Request::GetUser
 			uid_or_login = request.user
 			user = if uid_or_login.is_a? Int32
-				@users[uid_or_login.to_s]?
+				@users_per_uid.get? uid_or_login.to_s
 			else
 				@users_per_login.get? uid_or_login
 			end
@@ -110,7 +112,7 @@ class AuthD::Service
 				return Response::Error.new "invalid authentication key"
 			end
 
-			user = @users[request.uid.to_s]?
+			user = @users_per_uid.get? request.uid.to_s
 
 			unless user
 				return Response::Error.new "user not found"
@@ -120,7 +122,7 @@ class AuthD::Service
 				user.password_hash = hash_password s
 			end
 
-			@users[user.uid.to_s] = user
+			@users_per_uid.update user.uid.to_s, user
 
 			Response::UserEdited.new request.uid
 		when Request::Register
@@ -141,7 +143,7 @@ class AuthD::Service
 				user.profile = profile
 			end
 
-			@users[user.uid.to_s] = user
+			@users_per_uid.update user.uid.to_s, user
 
 			Response::UserAdded.new user.to_public
 		when Request::UpdatePassword
@@ -157,7 +159,7 @@ class AuthD::Service
 
 			user.password_hash = hash_password request.new_password
 
-			@users[user.uid.to_s] = user
+			@users_per_uid.update user.uid.to_s, user
 
 			Response::UserEdited.new user.uid
 		when Request::ListUsers
@@ -182,7 +184,7 @@ class AuthD::Service
 				return Response::Error.new "unauthorized"
 			end
 
-			user = @users[request.user.to_s]?
+			user = @users_per_uid.get? request.user.to_s
 
 			if user.nil?
 				return Response::Error.new "no such user"
@@ -207,7 +209,7 @@ class AuthD::Service
 				return Response::Error.new "unauthorized"
 			end
 
-			user = @users[request.user.to_s]?
+			user = @users_per_uid.get? request.user.to_s
 
 			if user.nil?
 				return Response::Error.new "no such user"
@@ -227,7 +229,7 @@ class AuthD::Service
 				service_permissions[request.resource] = request.permission
 			end
 
-			@users[user.uid.to_s] = user
+			@users_per_uid.update user.uid.to_s, user
 
 			Response::PermissionSet.new user.uid, service, request.resource, request.permission
 		else
@@ -238,7 +240,7 @@ class AuthD::Service
 	def get_user_from_token(token : String)
 		token_payload = Token.from_s(token, @jwt_key)
 
-		@users[token_payload.uid.to_s]?
+		@users_per_uid.get? token_payload.uid.to_s
 	end
 
 	def run
