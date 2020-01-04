@@ -273,29 +273,38 @@ authd_storage = "storage"
 authd_jwt_key = "nico-nico-nii"
 authd_registrations = false
 
-OptionParser.parse do |parser|
-	parser.banner = "usage: authd [options]"
+begin
+	OptionParser.parse do |parser|
+		parser.banner = "usage: authd [options]"
 
-	parser.on "-s directory", "--storage directory", "Directory in which to store users." do |directory|
-		authd_storage = directory
+		parser.on "-s directory", "--storage directory", "Directory in which to store users." do |directory|
+			authd_storage = directory
+		end
+
+		parser.on "-K file", "--key-file file", "JWT key file" do |file_name|
+			authd_jwt_key = File.read(file_name).chomp
+		end
+
+		parser.on "-R", "--allow-registrations" do
+			authd_registrations = true
+		end
+
+		parser.on "-h", "--help", "Show this help" do
+			puts parser
+
+			exit 0
+		end
 	end
 
-	parser.on "-K file", "--key-file file", "JWT key file" do |file_name|
-		authd_jwt_key = File.read(file_name).chomp
-	end
-
-	parser.on "-R", "--allow-registrations" do
-		authd_registrations = true
-	end
-
-	parser.on "-h", "--help", "Show this help" do
-		puts parser
-
-		exit 0
+	AuthD::Service.new(authd_storage, authd_jwt_key).tap do |authd|
+		authd.registrations_allowed = authd_registrations
+	end.run
+rescue e : OptionParser::Exception
+	STDERR.puts e.message
+rescue e
+	STDERR.puts "exception raised: #{e.message}"
+	e.backtrace.try &.each do |line|
+		STDERR << "  - " << line << '\n'
 	end
 end
-
-AuthD::Service.new(authd_storage, authd_jwt_key).tap do |authd|
-	authd.registrations_allowed = authd_registrations
-end.run
 
