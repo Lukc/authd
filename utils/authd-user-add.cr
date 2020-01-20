@@ -10,7 +10,7 @@ register = false
 OptionParser.parse do |parser|
 	parser.unknown_args do |args|
 		if args.size != 1
-			puts "usage: #{PROGRAM_NAME} [options]"
+			puts "usage: #{PROGRAM_NAME} <login> [options]"
 			puts parser
 			exit 1
 		end
@@ -31,7 +31,7 @@ OptionParser.parse do |parser|
 	end
 
 	parser.on "-h", "--help", "Prints this help message." do
-		puts "usage: #{PROGRAM_NAME} [options]"
+		puts "usage: #{PROGRAM_NAME} <login> [options]"
 		puts parser
 		exit 0
 	end
