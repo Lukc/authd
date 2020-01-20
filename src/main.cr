@@ -143,7 +143,7 @@ class AuthD::Service
 				user.profile = profile
 			end
 
-			@users_per_uid.update user.uid.to_s, user
+			@users << user
 
 			Response::UserAdded.new user.to_public
 		when Request::UpdatePassword
