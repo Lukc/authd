@@ -382,7 +382,7 @@ module AuthD
 			phone : String?,
 			profile : JSON::Any?) : ::AuthD::User::Public | Exception
 
-			send Request::AddUser.new @key, login, password, email, phone, profile
+			send Request::ValidateUser.new @key, login, password, email, phone, profile
 
 			response = Response.from_ipc read
 
