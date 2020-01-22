@@ -1,5 +1,7 @@
 require "json"
 
+require "uuid"
+
 require "./token.cr"
 
 class AuthD::User
@@ -19,10 +21,13 @@ class AuthD::User
 	class Contact
 		include JSON::Serializable
 
-		property email     : String?
-		property phone     : String?
+		# the activation key is removed once the user is validated
+		property activation_key : String?
+		property email          : String?
+		property phone          : String?
 
 		def initialize(@email = nil, @phone = nil)
+			@activation_key = UUID.random.to_s
 		end
 	end
 

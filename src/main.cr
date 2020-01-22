@@ -82,6 +82,8 @@ class AuthD::Service
 			user.contact.email = request.email
 			user.contact.phone = request.phone unless request.phone.nil?
 
+			pp! user
+
 			request.profile.try do |profile|
 				user.profile = profile
 			end
@@ -89,6 +91,27 @@ class AuthD::Service
 			@users << user
 
 			Response::UserAdded.new user.to_public
+		when Request::ValidateUser
+			if request.shared_key != @jwt_key
+				return Response::Error.new "invalid authentication key"
+			end
+
+			user = @users_per_login.get? request.login
+
+			if user.nil?
+				return Response::Error.new "user not found"
+			end
+
+			# remove the user contact activation key: the email is validated
+			if user.contact.activation_key == request.activation_key
+				user.contact.activation_key = nil
+			else
+				return Response::Error.new "Wrong activation key"
+			end
+
+			@users_per_uid.update user.uid.to_s, user
+
+			Response::UserValidated.new user.to_public
 		when Request::GetUserByCredentials
 			user = @users_per_login.get? request.login
 

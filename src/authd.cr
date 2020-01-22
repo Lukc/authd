@@ -70,10 +70,9 @@ class AuthD::Response
 	end
 
 	class UserValidated < Response
-		property uid    : Int32
-		property email  : String
+		property user   : ::AuthD::User::Public
 
-		initialize :uid, :email
+		initialize :user
 	end
 
 	class UsersList < Response
@@ -199,10 +198,10 @@ class AuthD::Request
 		# to validate users.
 		property shared_key        : String
 
-		property email             : String
+		property login             : String
 		property activation_key    : String
 
-		initialize :shared_key, :email, :activation_key
+		initialize :shared_key, :login, :activation_key
 	end
 
 	class GetUser < Request
@@ -382,7 +381,7 @@ module AuthD
 			phone : String?,
 			profile : JSON::Any?) : ::AuthD::User::Public | Exception
 
-			send Request::ValidateUser.new @key, login, password, email, phone, profile
+			send Request::AddUser.new @key, login, password, email, phone, profile
 
 			response = Response.from_ipc read
 
@@ -398,9 +397,11 @@ module AuthD
 			end
 		end
 
-		def validate_user(email : String, activation_key : String) : ::AuthD::User::Public | Exception
+		def validate_user(login : String, activation_key : String) : ::AuthD::User::Public | Exception
 
-			send Request::AddUser.new @key, email, activation_key
+			pp! login
+			pp! activation_key
+			send Request::ValidateUser.new @key, login, activation_key
 
 			response = Response.from_ipc read
 
