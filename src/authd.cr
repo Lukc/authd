@@ -69,6 +69,13 @@ class AuthD::Response
 		initialize :uid
 	end
 
+	class UserValidated < Response
+		property uid    : Int32
+		property email  : String
+
+		initialize :uid, :email
+	end
+
 	class UsersList < Response
 		property users  : Array(::AuthD::User::Public)
 
@@ -185,6 +192,17 @@ class AuthD::Request
 		property profile    : JSON::Any?
 
 		initialize :shared_key, :login, :password, :email, :phone, :profile
+	end
+
+	class ValidateUser < Request
+		# Only clients that have the right shared key will be allowed
+		# to validate users.
+		property shared_key        : String
+
+		property email             : String
+		property activation_key    : String
+
+		initialize :shared_key, :email, :activation_key
 	end
 
 	class GetUser < Request
@@ -370,6 +388,24 @@ module AuthD
 
 			case response
 			when Response::UserAdded
+				response.user
+			when Response::Error
+				raise Exception.new response.reason
+			else
+				# Should not happen in serialized connections, but…
+				# it’ll happen if you run several requests at once.
+				Exception.new
+			end
+		end
+
+		def validate_user(email : String, activation_key : String) : ::AuthD::User::Public | Exception
+
+			send Request::AddUser.new @key, email, activation_key
+
+			response = Response.from_ipc read
+
+			case response
+			when Response::UserValidated
 				response.user
 			when Response::Error
 				raise Exception.new response.reason
