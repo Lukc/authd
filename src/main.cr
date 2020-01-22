@@ -12,6 +12,7 @@ extend AuthD
 
 class AuthD::Service
 	property registrations_allowed = false
+	property require_email         = false
 
 	@users_per_login : DODB::Index(User)
 	@users_per_uid   : DODB::Index(User)
@@ -69,11 +70,17 @@ class AuthD::Service
 				return Response::Error.new "login already used"
 			end
 
+			if @require_email && request.email.nil?
+				return Response::Error.new "email required"
+			end
+
 			password_hash = hash_password request.password
 
 			uid = new_uid
 
 			user = User.new uid, request.login, password_hash
+			user.contact.email = request.email
+			user.contact.phone = request.phone unless request.phone.nil?
 
 			request.profile.try do |profile|
 				user.profile = profile
@@ -272,6 +279,7 @@ end
 authd_storage = "storage"
 authd_jwt_key = "nico-nico-nii"
 authd_registrations = false
+authd_require_email = false
 
 begin
 	OptionParser.parse do |parser|
@@ -289,6 +297,10 @@ begin
 			authd_registrations = true
 		end
 
+		parser.on "-E", "--require-email" do
+			authd_require_email = true
+		end
+
 		parser.on "-h", "--help", "Show this help" do
 			puts parser
 
@@ -298,6 +310,7 @@ begin
 
 	AuthD::Service.new(authd_storage, authd_jwt_key).tap do |authd|
 		authd.registrations_allowed = authd_registrations
+		authd.require_email         = authd_require_email
 	end.run
 rescue e : OptionParser::Exception
 	STDERR.puts e.message

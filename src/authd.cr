@@ -180,9 +180,11 @@ class AuthD::Request
 
 		property login      : String
 		property password   : String
+		property email      : String?
+		property phone      : String?
 		property profile    : JSON::Any?
 
-		initialize :shared_key, :login, :password, :profile
+		initialize :shared_key, :login, :password, :email, :phone, :profile
 	end
 
 	class GetUser < Request
@@ -211,9 +213,11 @@ class AuthD::Request
 	class Request::Register < Request
 		property login      : String
 		property password   : String
+		property email      : String?
+		property phone      : String?
 		property profile    : JSON::Any?
 
-		initialize :login, :password, :profile
+		initialize :login, :password, :email, :phone, :profile
 	end
 
 	class Request::UpdatePassword < Request
@@ -355,8 +359,12 @@ module AuthD
 		end
 
 		# FIXME: Extra options may be useful to implement here.
-		def add_user(login : String, password : String, profile : JSON::Any?) : ::AuthD::User::Public | Exception
-			send Request::AddUser.new @key, login, password, profile
+		def add_user(login : String, password : String,
+			email : String?,
+			phone : String?,
+			profile : JSON::Any?) : ::AuthD::User::Public | Exception
+
+			send Request::AddUser.new @key, login, password, email, phone, profile
 
 			response = Response.from_ipc read
 

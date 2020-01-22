@@ -16,13 +16,25 @@ class AuthD::User
 		end
 	end
 
+	class Contact
+		include JSON::Serializable
+
+		property email     : String?
+		property phone     : String?
+
+		def initialize(@email = nil, @phone = nil)
+		end
+	end
+
 	# Public.
 	property login         : String
 	property uid           : Int32
 	property profile       : JSON::Any?
 
 	# Private.
+	property contact       : Contact
 	property password_hash : String
+	# service => resource => permission level
 	property permissions   : Hash(String, Hash(String, PermissionLevel))
 	property configuration : Hash(String, Hash(String, JSON::Any))
 
@@ -31,6 +43,7 @@ class AuthD::User
 	end
 
 	def initialize(@uid, @login, @password_hash)
+		@contact       = Contact.new
 		@permissions   = Hash(String, Hash(String, PermissionLevel)).new
 		@configuration = Hash(String, Hash(String, JSON::Any)).new
 	end
