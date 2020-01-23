@@ -82,13 +82,23 @@ class AuthD::Service
 			user.contact.email = request.email
 			user.contact.phone = request.phone unless request.phone.nil?
 
-			pp! user
-
 			request.profile.try do |profile|
 				user.profile = profile
 			end
 
 			@users << user
+
+			# Once the user is created and stored, we try to contact him
+			# TODO: send a mail
+			unless Process.run("activation-mailer", [
+				"-l", user.login,
+				"-e", user.contact.email.not_nil!,
+				"-t", "Activation email",
+				"-f", "karchnu@localhost",
+				"-a", user.contact.activation_key.not_nil!
+				]).success?
+				return Response::Error.new "cannot contact the user"
+			end
 
 			Response::UserAdded.new user.to_public
 		when Request::ValidateUser
@@ -100,6 +110,10 @@ class AuthD::Service
 
 			if user.nil?
 				return Response::Error.new "user not found"
+			end
+
+			if user.contact.activation_key.nil?
+				return Response::Error.new "user already validated"
 			end
 
 			# remove the user contact activation key: the email is validated
