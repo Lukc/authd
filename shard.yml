@@ -12,9 +12,11 @@ targets:
   authd:
     main: src/main.cr
 
-crystal: 0.27
+crystal: 0.31
 
 dependencies:
+    grok:
+        github: spinscale/grok.cr
     passwd:
         git: https://git.karchnu.fr/WeirdOS/passwd.cr
         branch: master

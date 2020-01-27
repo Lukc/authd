@@ -6,6 +6,8 @@ require "jwt"
 require "ipc"
 require "dodb"
 
+require "grok"
+
 require "./authd.cr"
 
 extend AuthD
@@ -62,6 +64,8 @@ class AuthD::Service
 
 			Response::Token.new token.to_s @jwt_key
 		when Request::AddUser
+			# No verification of the users' informations when an admin adds it.
+			# No mail address verification.
 			if request.shared_key != @jwt_key
 				return Response::Error.new "invalid authentication key"
 			end
@@ -79,7 +83,7 @@ class AuthD::Service
 			uid = new_uid
 
 			user = User.new uid, request.login, password_hash
-			user.contact.email = request.email
+			user.contact.email = request.email unless request.email.nil?
 			user.contact.phone = request.phone unless request.phone.nil?
 
 			request.profile.try do |profile|
@@ -87,18 +91,6 @@ class AuthD::Service
 			end
 
 			@users << user
-
-			# Once the user is created and stored, we try to contact him
-			# TODO: send a mail
-			unless Process.run("activation-mailer", [
-				"-l", user.login,
-				"-e", user.contact.email.not_nil!,
-				"-t", "Activation email",
-				"-f", "karchnu@localhost",
-				"-a", user.contact.activation_key.not_nil!
-				]).success?
-				return Response::Error.new "cannot contact the user"
-			end
 
 			Response::UserAdded.new user.to_public
 		when Request::ValidateUser
@@ -178,16 +170,44 @@ class AuthD::Service
 				return Response::Error.new "login already used"
 			end
 
+			if @require_email && request.email.nil?
+				return Response::Error.new "email required"
+			end
+
+			if ! request.email.nil?
+				# Test on the email address format.
+				grok = Grok.new [ "%{EMAILADDRESS:email}" ]
+				result = grok.parse request.email.not_nil!
+				email = result["email"]?
+
+				if email.nil?
+					return Response::Error.new "invalid email format"
+				end
+			end
+
 			uid = new_uid
 			password = hash_password request.password
 
 			user = User.new uid, request.login, password
+			user.contact.email = request.email unless request.email.nil?
+			user.contact.phone = request.phone unless request.phone.nil?
 
 			request.profile.try do |profile|
 				user.profile = profile
 			end
 
 			@users << user
+
+			# Once the user is created and stored, we try to contact him
+			unless Process.run("activation-mailer", [
+				"-l", user.login,
+				"-e", user.contact.email.not_nil!,
+				"-t", "Activation email",
+				"-f", "karchnu@localhost",
+				"-a", user.contact.activation_key.not_nil!
+				]).success?
+				return Response::Error.new "cannot contact the user (but still registered)"
+			end
 
 			Response::UserAdded.new user.to_public
 		when Request::UpdatePassword

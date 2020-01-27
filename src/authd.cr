@@ -417,9 +417,13 @@ module AuthD
 			end
 		end
 
-		def register(login : String, password : String, profile : JSON::Any?) : ::AuthD::User::Public?
-			send Request::Register.new login, password, profile
+		def register(login : String,
+			password : String,
+			email : String?,
+			phone : String?,
+			profile : JSON::Any?) : ::AuthD::User::Public?
 
+			send Request::Register.new login, password, email, phone, profile
 			response = Response.from_ipc read
 
 			case response
