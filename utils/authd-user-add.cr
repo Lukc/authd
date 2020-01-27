@@ -11,14 +11,11 @@ phone = nil
 
 OptionParser.parse do |parser|
 	parser.unknown_args do |args|
-		if args.size == 0 || args.size > 3
+		if args.size != 3
 			puts "usage: #{PROGRAM_NAME} <login> <email> <phone> [options]"
 			puts parser
 			exit 1
 		end
-
-		puts "coucou"
-		pp! args
 
 		cli_login, email, phone = args[0..2]
 	end
