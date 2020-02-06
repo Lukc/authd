@@ -131,7 +131,7 @@ class AuthD::Response
 
 	def self.from_ipc(message : IPC::Message) : Response?
 		payload = String.new message.payload
-		type = Type.new message.type.to_i
+		type = Type.new message.utype.to_i
 
 		requests.find(&.type.==(type)).try &.from_json(payload)
 	rescue e : JSON::ParseException
@@ -303,7 +303,7 @@ class AuthD::Request
 
 	def self.from_ipc(message : IPC::Message) : Request?
 		payload = String.new message.payload
-		type = Type.new message.type.to_i
+		type = Type.new message.utype.to_i
 
 		requests.find(&.type.==(type)).try &.from_json(payload)
 	rescue e : JSON::ParseException
