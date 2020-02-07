@@ -154,7 +154,7 @@ class AuthD::Service
 				return Response::Error.new "user not found"
 			end
 
-			password_hash = request.password.try do |s|
+			request.password.try do |s|
 				user.password_hash = hash_password s
 			end
 
