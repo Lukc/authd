@@ -220,11 +220,13 @@ class AuthD::Request
 	class ModUser < Request
 		property shared_key : String
 
-		property uid        : Int32
+		property user       : Int32 | String
 		property password   : String?
+		property email      : String?
+		property phone      : String?
 		property avatar     : String?
 
-		initialize :shared_key, :uid
+		initialize :shared_key, :user
 	end
 
 	class Request::Register < Request
@@ -433,10 +435,12 @@ module AuthD
 			end
 		end
 
-		def mod_user(uid : Int32, password : String? = nil, avatar : String? = nil) : Bool | Exception
-			request = Request::ModUser.new @key, uid
+		def mod_user(uid_or_login : Int32 | String, password : String? = nil, email : String? = nil, phone : String? = nil, avatar : String? = nil) : Bool | Exception
+			request = Request::ModUser.new @key, uid_or_login
 
 			request.password = password if password
+			request.email    = email    if email
+			request.phone    = phone    if phone
 			request.avatar   = avatar   if avatar
 
 			send request

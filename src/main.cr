@@ -148,7 +148,12 @@ class AuthD::Service
 				return Response::Error.new "invalid authentication key"
 			end
 
-			user = @users_per_uid.get? request.uid.to_s
+			uid_or_login = request.user
+			user = if uid_or_login.is_a? Int32
+				@users_per_uid.get? uid_or_login.to_s
+			else
+				@users_per_login.get? uid_or_login
+			end
 
 			unless user
 				return Response::Error.new "user not found"
@@ -158,9 +163,17 @@ class AuthD::Service
 				user.password_hash = hash_password s
 			end
 
+			request.email.try do |email|
+				user.contact.email = email
+			end
+
+			request.phone.try do |phone|
+				user.contact.phone = phone
+			end
+
 			@users_per_uid.update user.uid.to_s, user
 
-			Response::UserEdited.new request.uid
+			Response::UserEdited.new user.uid
 		when Request::Register
 			if ! @registrations_allowed
 				return Response::Error.new "registrations not allowed"
