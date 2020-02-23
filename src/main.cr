@@ -209,6 +209,7 @@ class AuthD::Service
 				user.profile = profile
 			end
 
+
 			@users << user
 
 			# Once the user is created and stored, we try to contact him
@@ -309,6 +310,62 @@ class AuthD::Service
 			@users_per_uid.update user.uid.to_s, user
 
 			Response::PermissionSet.new user.uid, service, request.resource, request.permission
+		when Request::AskPasswordRecovery
+
+			uid_or_login = request.user
+			user = if uid_or_login.is_a? Int32
+				@users_per_uid.get? uid_or_login.to_s
+			else
+				@users_per_login.get? uid_or_login
+			end
+
+			if user.nil?
+				return Response::Error.new "user not found"
+			end
+
+			user.password_renew_key = UUID.random.to_s
+
+			@users_per_uid.update user.uid.to_s, user
+
+			# Once the user is created and stored, we try to contact him
+			unless Process.run("password-recovery-mailer", [
+				"-l", user.login,
+				"-e", user.contact.email.not_nil!,
+				"-t", "Password recovery email",
+				"-f", "karchnu@localhost",
+				"-a", user.password_renew_key.not_nil!
+				]).success?
+				return Response::Error.new "cannot contact the user for password recovery"
+			end
+
+			Response::PasswordRecoverySent.new user.to_public
+		when Request::PasswordRecovery
+			if request.shared_key != @jwt_key
+				return Response::Error.new "invalid authentication key"
+			end
+
+			uid_or_login = request.user
+			user = if uid_or_login.is_a? Int32
+				@users_per_uid.get? uid_or_login.to_s
+			else
+				@users_per_login.get? uid_or_login
+			end
+
+			if user.nil?
+				return Response::Error.new "user not found"
+			end
+
+			if user.password_renew_key == request.password_renew_key
+				user.password_hash = hash_password request.new_password
+			else
+				return Response::Error.new "renew key not valid"
+			end
+
+			user.password_renew_key = nil
+
+			@users_per_uid.update user.uid.to_s, user
+
+			Response::PasswordRecoverySent.new user.to_public
 		else
 			Response::Error.new "unhandled request type"
 		end

@@ -99,6 +99,18 @@ class AuthD::Response
 		initialize :user, :service, :resource, :permission
 	end
 
+	class PasswordRecoverySent < Response
+		property user   : ::AuthD::User::Public
+
+		initialize :user
+	end
+
+	class PasswordRecovered < Response
+		property user   : ::AuthD::User::Public
+
+		initialize :user
+	end
+
 	# This creates a Request::Type enumeration. One entry for each request type.
 	{% begin %}
 		enum Type
@@ -273,6 +285,21 @@ class AuthD::Request
 		initialize :shared_key, :user, :service, :resource, :permission
 	end
 
+	class PasswordRecovery < Request
+		property shared_key         : String
+		property user               : Int32 | String
+		property password_renew_key : String
+		property new_password       : String
+
+		initialize :shared_key, :user, :password_renew_key, :new_password
+	end
+
+	class AskPasswordRecovery < Request
+		property user       : Int32 | String
+
+		initialize :user
+	end
+
 	# This creates a Request::Type enumeration. One entry for each request type.
 	{% begin %}
 		enum Type
@@ -309,7 +336,7 @@ class AuthD::Request
 
 		requests.find(&.type.==(type)).try &.from_json(payload)
 	rescue e : JSON::ParseException
-		raise Exception.new "malformed request"
+		raise Exception.new "malformed request: #{e}"
 	end
 end
 
@@ -415,6 +442,32 @@ module AuthD
 			else
 				# Should not happen in serialized connections, but…
 				# it’ll happen if you run several requests at once.
+				Exception.new
+			end
+		end
+
+		def ask_password_recovery(uid_or_login : String | Int32)
+			send Request::AskPasswordRecovery.new uid_or_login
+			response = Response.from_ipc read
+
+			case response
+			when Response::PasswordRecoverySent
+			when Response::Error
+				raise Exception.new response.reason
+			else
+				Exception.new
+			end
+		end
+
+		def change_password(uid_or_login : String | Int32, new_pass : String, renew_key : String)
+			send Request::PasswordRecovery.new @key, uid_or_login, renew_key, new_pass
+			response = Response.from_ipc read
+
+			case response
+			when Response::PasswordRecovered
+			when Response::Error
+				raise Exception.new response.reason
+			else
 				Exception.new
 			end
 		end

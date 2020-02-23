@@ -39,6 +39,7 @@ class AuthD::User
 	# Private.
 	property contact       : Contact
 	property password_hash : String
+	property password_renew_key : String?
 	# service => resource => permission level
 	property permissions   : Hash(String, Hash(String, PermissionLevel))
 	property configuration : Hash(String, Hash(String, JSON::Any))
