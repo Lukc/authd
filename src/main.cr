@@ -1,6 +1,7 @@
 require "uuid"
 require "option_parser"
 require "openssl"
+require "colorize"
 
 require "jwt"
 require "ipc"
@@ -324,6 +325,14 @@ class AuthD::Service
 		@users_per_uid.get? token_payload.uid.to_s
 	end
 
+	def info(message)
+		STDOUT << ":: ".colorize(:green) << message.colorize(:white) << "\n"
+	end
+
+	def error(message)
+		STDOUT << "!! ".colorize(:red) << message.colorize(:red) << "\n"
+	end
+
 	def run
 		##
 		# Provides a JWT-based authentication scheme for service-specific users.
@@ -339,11 +348,16 @@ class AuthD::Service
 				begin
 					request = Request.from_ipc event.message
 
+					info "<< #{request.class.name.sub /^Request::/, ""}"
+
 					response = handle_request request, event.connection
+
+					info ">> #{response.class.name.sub /^Response::/, ""}"
 
 					event.connection.send response
 				rescue e
-					STDERR.puts "error: #{e.message}"
+					error "!! #{e.message}"
+					event.connection.send Response::Error.new e.message
 				end
 			end
 		end
