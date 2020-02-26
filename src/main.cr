@@ -50,7 +50,11 @@ class AuthD::Service
 	def handle_request(request : AuthD::Request?, connection : IPC::Connection)
 		case request
 		when Request::GetToken
-			user = @users_per_login.get request.login
+			begin
+				user = @users_per_login.get request.login
+			rescue e : DODB::MissingEntry
+				return Response::Error.new "invalid credentials"
+			end
 
 			if user.password_hash != hash_password request.password
 				return Response::Error.new "invalid credentials"
