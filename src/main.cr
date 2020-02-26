@@ -352,13 +352,18 @@ class AuthD::Service
 
 					response = handle_request request, event.connection
 
-					info ">> #{response.class.name.sub /^Response::/, ""}"
-
 					event.connection.send response
+				rescue e : MalformedRequest
+					error "#{e.message}"
+					error " .. type was:    #{e.ipc_type}"
+					error " .. payload was: #{e.payload}"
+					response =  Response::Error.new e.message
 				rescue e
 					error "#{e.message}"
-					event.connection.send Response::Error.new e.message
+					response = Response::Error.new e.message
 				end
+
+				info ">> #{response.class.name.sub /^Response::/, ""}"
 			end
 		end
 	end

@@ -9,6 +9,15 @@ require "./user.cr"
 class AuthD::Exception < Exception
 end
 
+class AuthD::MalformedRequest < Exception
+	getter ipc_type : Int32
+	getter payload : String
+
+	def initialize(@ipc_type, @payload)
+		@message = "malformed payload"
+	end
+end
+
 class AuthD::Response
 	include JSON::Serializable
 
@@ -133,9 +142,11 @@ class AuthD::Response
 		payload = String.new message.payload
 		type = Type.new message.utype.to_i
 
-		requests.find(&.type.==(type)).try &.from_json(payload)
-	rescue e : JSON::ParseException
-		raise Exception.new "malformed request"
+		begin
+			requests.find(&.type.==(type)).try &.from_json(payload)
+		rescue e : JSON::ParseException
+			raise MalformedRequest.new message.utype.to_i, payload
+		end
 	end
 end
 
@@ -307,9 +318,11 @@ class AuthD::Request
 		payload = String.new message.payload
 		type = Type.new message.utype.to_i
 
-		requests.find(&.type.==(type)).try &.from_json(payload)
-	rescue e : JSON::ParseException
-		raise Exception.new "malformed request"
+		begin
+			requests.find(&.type.==(type)).try &.from_json(payload)
+		rescue e : JSON::ParseException
+			raise MalformedRequest.new message.utype.to_i, payload
+		end
 	end
 end
 
