@@ -356,7 +356,7 @@ class AuthD::Service
 
 					event.connection.send response
 				rescue e
-					error "!! #{e.message}"
+					error "#{e.message}"
 					event.connection.send Response::Error.new e.message
 				end
 			end
