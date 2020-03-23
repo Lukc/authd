@@ -37,12 +37,14 @@ class AuthD::User
 	property profile       : JSON::Any?
 
 	# Private.
-	property contact       : Contact
-	property password_hash : String
-	property password_renew_key : String?
+	property contact              : Contact
+	property password_hash        : String
+	property password_renew_key   : String?
 	# service => resource => permission level
-	property permissions   : Hash(String, Hash(String, PermissionLevel))
-	property configuration : Hash(String, Hash(String, JSON::Any))
+	property permissions          : Hash(String, Hash(String, PermissionLevel))
+	property configuration        : Hash(String, Hash(String, JSON::Any))
+	property date_last_connection : Time? = nil
+	property date_registration    : Time? = nil
 
 	def to_token
 		Token.new @login, @uid

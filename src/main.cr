@@ -60,7 +60,11 @@ class AuthD::Service
 				return Response::Error.new "invalid credentials"
 			end
 
+			user.date_last_connection = Time.local
 			token = user.to_token
+
+			# change the date of the last connection
+			@users_per_uid.update user.uid.to_s, user
 
 			Response::Token.new token.to_s @jwt_key
 		when Request::AddUser
@@ -89,6 +93,9 @@ class AuthD::Service
 			request.profile.try do |profile|
 				user.profile = profile
 			end
+
+			# We consider adding the user as a registration
+			user.date_registration = Time.local
 
 			@users << user
 
@@ -128,6 +135,11 @@ class AuthD::Service
 			if hash_password(request.password) != user.password_hash
 				return Response::Error.new "invalid credentials"
 			end
+
+			user.date_last_connection = Time.local
+
+			# change the date of the last connection
+			@users_per_uid.update user.uid.to_s, user
 
 			Response::User.new user.to_public
 		when Request::GetUser
@@ -209,8 +221,7 @@ class AuthD::Service
 				user.profile = profile
 			end
 
-
-			@users << user
+			user.date_registration = Time.local
 
 			# Once the user is created and stored, we try to contact him
 			unless Process.run("activation-mailer", [
@@ -222,6 +233,9 @@ class AuthD::Service
 				]).success?
 				return Response::Error.new "cannot contact the user (but still registered)"
 			end
+
+			# add the user only if we were able to send the confirmation mail
+			@users << user
 
 			Response::UserAdded.new user.to_public
 		when Request::UpdatePassword
