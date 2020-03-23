@@ -23,6 +23,8 @@ targets:
     main: utils/authd-user-mod.cr
   auth-user-validate:
     main: utils/authd-user-validate.cr
+  auth-user-search:
+    main: utils/authd-user-search.cr
 
 crystal: 0.31
 

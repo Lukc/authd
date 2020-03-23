@@ -385,6 +385,23 @@ class AuthD::Service
 			@users_per_uid.update user.uid.to_s, user
 
 			Response::PasswordRecoverySent.new user.to_public
+		when Request::SearchUser
+			pattern = Regex.new request.user
+
+			matching_users = Array(AuthD::User::Public).new
+
+			users = @users.to_a
+			users.each do |u|
+				# pp! u
+				if pattern =~ u.login
+					puts "#{u.login} matches #{pattern}"
+					matching_users << u.to_public
+				else
+					puts "#{u.login} doesn't match #{pattern}"
+				end
+			end
+
+			Response::MatchingUsers.new matching_users
 		else
 			Response::Error.new "unhandled request type"
 		end

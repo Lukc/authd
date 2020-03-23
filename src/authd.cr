@@ -120,6 +120,12 @@ class AuthD::Response
 		initialize :user
 	end
 
+	class MatchingUsers < Response
+		property users  : Array(::AuthD::User::Public)
+
+		initialize :users
+	end
+
 	# This creates a Request::Type enumeration. One entry for each request type.
 	{% begin %}
 		enum Type
@@ -307,6 +313,12 @@ class AuthD::Request
 
 	class AskPasswordRecovery < Request
 		property user       : Int32 | String
+
+		initialize :user
+	end
+
+	class SearchUser < Request
+		property user : String
 
 		initialize :user
 	end
@@ -554,6 +566,20 @@ module AuthD
 				raise Exception.new "unexpected response: #{response.type}"
 			else
 				raise Exception.new "unexpected response"
+			end
+		end
+
+		def search_user(user_login : String)
+			send Request::SearchUser.new user_login
+			response = Response.from_ipc read
+
+			case response
+			when Response::MatchingUsers
+				response.users
+			when Response::Error
+				raise Exception.new response.reason
+			else
+				Exception.new
 			end
 		end
 	end
